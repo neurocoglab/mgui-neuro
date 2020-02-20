@@ -1,0 +1,1189 @@
+package ar.interfaces.neuro;
+
+import java.awt.Container;
+import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.io.IOException;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
+import javax.swing.JComboBox;
+import javax.swing.JFrame;
+import javax.swing.JLabel;
+import javax.swing.JTextField;
+
+import ar.interfaces.InterfaceDialogUpdater;
+import ar.interfaces.InterfaceDisplayPanel;
+import ar.interfaces.InterfacePanel;
+import ar.interfaces.InterfaceParameters;
+import ar.interfaces.io.ByteBufferInputStream;
+import ar.interfaces.io.InputStreamDialog;
+import ar.interfaces.io.InterfaceDataStream;
+import ar.interfaces.io.InterfaceDataStreamPanel;
+import ar.interfaces.io.InterfaceInputStream;
+import ar.interfaces.io.InterfaceOutputStream;
+import ar.interfaces.io.temp.TempBitmapDrawer;
+import ar.interfaces.io.temp.TempDataBank;
+import ar.interfaces.layouts.CategoryLayout;
+import ar.interfaces.layouts.CategoryLayoutConstraints;
+import ar.interfaces.layouts.CategoryTitle;
+import ar.interfaces.models.InterfaceAbstractModel;
+import ar.models.dynamic.DynamicModel;
+import ar.models.dynamic.DynamicModelEngine;
+import ar.models.dynamic.DynamicModelEnvironmentSensor;
+import ar.models.dynamic.DynamicModelException;
+import ar.models.dynamic.functions.Function;
+import ar.models.dynamic.functions.HardLimitFunction;
+import ar.neuro.components.AbstractAxon;
+import ar.neuro.components.AbstractNeuron;
+import ar.neuro.components.AbstractSynapse;
+import ar.neuro.components.Synapse;
+import ar.neuro.components.hopfield.HopfieldUnit;
+import ar.neuro.components.simple.SimpleNeuron;
+import ar.neuro.components.simple.SimpleSynapse;
+import ar.neuro.components.types.ConnectableNeuron;
+import ar.neuro.components.types.ReciprocalConnection;
+import ar.neuro.components.types.WeightedSynapse;
+import ar.neuro.environments.SimpleEnvironment;
+import ar.neuro.networks.AbstractNeuralNet;
+import ar.neuro.networks.HopfieldNet;
+import ar.neuro.networks.KohonenNet;
+import ar.neuro.networks.PerceptronNet;
+import ar.neuro.stats.SimpleStatistics;
+
+/*********************************
+ * Interface panel for instantiating, parameterizing, training, and testing neural
+ * networks.
+ * 
+ * @author Andrew Reid
+ *
+ */
+
+public class InterfaceNeuroNetPanel extends InterfacePanel 
+									implements ActionListener,
+											   InterfaceDialogUpdater{
+
+	//general stuff
+	public AbstractNeuralNet currentModel, selectedModel;
+	public DynamicModelEngine engine;
+	public SimpleStatistics stats;
+	boolean updateModel = true;
+	boolean updateTrainInput = true;
+	boolean updateInput = true;
+	
+	//i-o stuff
+	
+	InterfaceInputStream inputStream;
+	InterfaceInputStream inputTrainStream;
+	InterfaceInputStream inputTestStream;
+	InterfaceOutputStream outputStream;
+	InterfaceOutputStream outputTrainStream;
+	InterfaceOutputStream outputTestStream;
+	
+	boolean setInputStream;
+	Function inputFunction;
+	
+	CategoryTitle lblModels = new CategoryTitle("MODELS");
+	JLabel lblModelType = new JLabel("Type:");
+	JComboBox cmbModelType = new JComboBox();
+	JLabel lblModel = new JLabel("Model:");
+	JComboBox cmbModel = new JComboBox();
+	JButton cmdSetModel = new JButton("Set");
+	JButton cmdAddModel = new JButton("Add");
+	JButton cmdCopyModel = new JButton("Copy");
+	JButton cmdDelModel = new JButton("Del");
+	
+	CategoryTitle lblGeneral = new CategoryTitle("GENERAL");
+	
+	//HOPFIELD STUFF
+	JLabel lblHopfieldName = new JLabel("Name:");
+	JTextField txtHopfieldName = new JTextField("");
+	JLabel lblHopfieldNodeCount = new JLabel("Node count:");
+	JTextField txtHopfieldNodeCount = new JTextField("");
+	JButton cmdHopfieldApplyGeneral = new JButton("Apply");
+	JButton cmdHopfieldMatchSample = new JButton("Match");
+	
+	CategoryTitle lblTraining = new CategoryTitle("TRAINING");
+	//GENERAL STUFF
+	JLabel lblTrainInputStream = new JLabel("Input str:");
+	JComboBox cmbTrainInputStream = new JComboBox();
+	JButton cmdTrainDefInputStream = new JButton("Define..");
+	JButton cmdTrainNewInputStream = new JButton("New..");
+	JLabel lblLearnRate = new JLabel("Learn rate:");
+	JTextField txtLearnRate = new JTextField("0.050");
+	
+	//HOPFIELD STUFF
+	JLabel lblHopfieldWeights = new JLabel("Initial Weights");
+	JLabel lblHopfieldWeightMax = new JLabel("Max:");
+	JTextField txtHopfieldWeightMax = new JTextField("0.10");
+	JLabel lblHopfieldWeightMin = new JLabel("Min:");
+	JTextField txtHopfieldWeightMin = new JTextField("-0.10");
+	JButton cmdHopfieldInitWeights = new JButton("Set");
+	JLabel lblHopfieldNameMap = new JLabel("Name map:");
+	JComboBox cmbHopfieldNameMap = new JComboBox();
+	JButton cmdHopfieldNewNameMap = new JButton("New..");
+	
+	CategoryTitle lblTesting = new CategoryTitle("TESTING");
+	JLabel lblTestInputStream = new JLabel("Input str:");
+	JComboBox cmbTestInputStream = new JComboBox();
+	JButton cmdTestDefInputStream = new JButton("Define..");
+	JButton cmdTestNewInputStream = new JButton("New..");
+	
+	CategoryTitle lblDataDisplay = new CategoryTitle("DATA DISPLAY");
+	JLabel lblDispShow = new JLabel("Show: ");
+	JComboBox cmbDispShow = new JComboBox();
+	JLabel lblDispInput = new JLabel("<html><u>Input</u></html>");
+	//TODO replace this drawer with something more sophisticated?
+	TempBitmapDrawer bitmapInput = new TempBitmapDrawer(10);
+	JLabel lblDispSample = new JLabel("Sample:");
+	JTextField txtDispSample = new JTextField("-1");
+	JLabel lblDispValue = new JLabel("Value:");
+	JTextField txtDispValue = new JTextField("-1");
+	//sample nav buttons
+	//TODO: give these guys icons
+	JButton cmdDispShowFirst = new JButton("|<");
+	JButton cmdDispShowPrev = new JButton("<");
+	JButton cmdDispShowNext = new JButton(">");
+	JButton cmdDispShowLast = new JButton(">|");
+	//editing controls
+	JCheckBox chkDispEditable = new JCheckBox("Editable");
+	JLabel lblDispEditValue = new JLabel("Value:");
+	JTextField txtDispEditValue = new JTextField("-1");
+	JLabel lblDispEditBrush = new JLabel("Radius:");
+	JTextField txtDispEditBrush = new JTextField("1");
+	JButton cmdDispEditSave = new JButton("Save");
+	JButton cmdDispEditDisc = new JButton("Discard");
+	JButton cmdDispEditAdd = new JButton("Add");
+	JButton cmdDispEditDel = new JButton("Del");
+	JLabel lblDispOutput = new JLabel("<html><u>Output</u></html>");
+	TempBitmapDrawer bitmapOutput = new TempBitmapDrawer(10);
+	
+	CategoryTitle lblExecution = new CategoryTitle("EXECUTION");
+	JLabel lblExecTask = new JLabel("Task:");
+	JComboBox cmbExecTask = new JComboBox();
+	JButton cmdExecSetEngine = new JButton("Set Engine");
+	JButton cmdExecSetModel = new JButton("Set Model");
+	JLabel lblExecControlParams = new JLabel("<html><u>Control Parameters</u> </html>");
+	JLabel lblExecIterStep = new JLabel("Iters/step:");
+	JTextField txtExecIterStep = new JTextField("1");
+	JLabel lblExecStepTo = new JLabel("Step to:");
+	JTextField txtExecStepTo = new JTextField("0");
+	JLabel lblExecTimeStep = new JLabel("Timestep (ms):");
+	JTextField txtExecTimeStep = new JTextField("1.00");
+	JLabel lblExecPlayRate = new JLabel("Play rate:");
+	JTextField txtExecPlayRate = new JTextField("1");
+	JLabel lblExecConverge = new JLabel("Converge:");
+	JTextField txtExecConverge = new JTextField("0.05");
+	JLabel lblExecExecute = new JLabel("<html><u>Execute</u> </html>");
+	JButton cmdExecReset = new JButton("|<");
+	JButton cmdExecStop = new JButton("||");
+	JButton cmdExecPlay = new JButton(">");
+	JButton cmdExecStep = new JButton("|>");
+	JButton cmdExecPlayAll = new JButton(">|");
+	JLabel lblExecSysInfo = new JLabel("<html><u>System Info</u> </html>");
+	JLabel lblExecEnergy = new JLabel("Energy:");
+	JTextField txtExecEnergy = new JTextField();
+	JLabel lblExecDeltaE = new JLabel("DeltaE:");
+	JTextField txtExecDeltaE = new JTextField();
+	JLabel lblExecIteration = new JLabel("Iteration:");
+	JTextField txtExecIteration = new JTextField();
+	JLabel lblExecTime = new JLabel("Time:");
+	JTextField txtExecTime = new JTextField();
+	JLabel lblExecSample = new JLabel("Sample:");
+	JTextField txtExecSample = new JTextField();
+	
+	public InterfaceNeuroNetPanel(){
+		init();
+	}
+	
+	public InterfaceNeuroNetPanel(InterfaceDisplayPanel p){
+		displayPanel = p;
+		init();
+	}
+	
+	protected void init(){
+		
+		//input function
+		inputFunction = new HardLimitFunction(-1, 0, 1);
+		
+		//action listeners
+		cmbModelType.setActionCommand("Model Type Changed");
+		cmbModelType.addActionListener(this);
+		cmbModel.setActionCommand("Model Changed");
+		cmbModel.addActionListener(this);
+		cmbExecTask.setActionCommand("Exec Task");
+		cmbExecTask.addActionListener(this);
+		cmbDispShow.setActionCommand("Display Show Source");
+		cmbDispShow.addActionListener(this);
+		cmbTrainInputStream.setActionCommand("Input Changed Train");
+		cmbTrainInputStream.addActionListener(this);
+		cmbTestInputStream.setActionCommand("Input Changed Test");
+		cmbTestInputStream.addActionListener(this);
+		
+		cmdSetModel.setActionCommand("Set/Create Model");
+		cmdSetModel.addActionListener(this);
+		cmdHopfieldApplyGeneral.setActionCommand("Apply Hopfield General");
+		cmdHopfieldApplyGeneral.addActionListener(this);
+		cmdHopfieldMatchSample.setActionCommand("Match Hopfield");
+		cmdHopfieldMatchSample.addActionListener(this);
+		cmdHopfieldInitWeights.setActionCommand("Set Hopfield Weights");
+		cmdHopfieldInitWeights.addActionListener(this);
+		cmdTrainNewInputStream.setActionCommand("New Input Train");
+		cmdTrainNewInputStream.addActionListener(this);
+		cmdTestNewInputStream.setActionCommand("New Input Test");
+		cmdTestNewInputStream.addActionListener(this);
+		cmdDispShowNext.setActionCommand("Display Show Next");
+		cmdDispShowNext.addActionListener(this);
+		cmdDispShowPrev.setActionCommand("Display Show Previous");
+		cmdDispShowPrev.addActionListener(this);
+		cmdDispShowFirst.setActionCommand("Display Show First");
+		cmdDispShowFirst.addActionListener(this);
+		cmdDispShowLast.setActionCommand("Display Show Last");
+		cmdDispShowLast.addActionListener(this);
+		cmdDispEditSave.setActionCommand("Display Edit Save");
+		cmdDispEditSave.addActionListener(this);
+		cmdExecSetEngine.setActionCommand("Execute Set Engine");
+		cmdExecSetEngine.addActionListener(this);
+		cmdExecSetEngine.setToolTipText("Set engine with current model");
+		cmdExecSetModel.setActionCommand("Execute Set Model");
+		cmdExecSetModel.addActionListener(this);
+		cmdExecSetModel.setToolTipText("Set current model from engine");
+		cmdExecStep.setActionCommand("Execute Model Step");
+		cmdExecStep.addActionListener(this);
+		
+		cmdExecReset.setActionCommand("Execute Reset");
+		cmdExecReset.addActionListener(this);
+		
+		//combo boxes
+		fillModelTypeCombo();
+		fillModelCombo();
+		fillInputCombo();
+		cmbExecTask.addItem("Train");
+		cmbExecTask.addItem("Test");
+		cmbDispShow.addItem("Training");
+		cmbDispShow.addItem("Testing");
+		
+		//check boxes
+		chkDispEditable.setActionCommand("Toggle Display Editable");
+		chkDispEditable.addActionListener(this);
+		
+		//init layout
+		setLayout(new CategoryLayout(20, 5, 200, 10));
+		
+		//add controls
+		CategoryLayoutConstraints c = new CategoryLayoutConstraints();
+		
+		add(lblModels, c);
+		lblModels.setParentObj(this);
+		c = new CategoryLayoutConstraints("MODELS", 1, 1, 0.05, 0.25, 1);
+		add(lblModelType, c);
+		c = new CategoryLayoutConstraints("MODELS", 1, 1, 0.32, 0.63, 1);
+		add(cmbModelType, c);
+		c = new CategoryLayoutConstraints("MODELS", 2, 2, 0.05, 0.25, 1);
+		add(lblModel, c);
+		c = new CategoryLayoutConstraints("MODELS", 2, 2, 0.32, 0.63, 1);
+		add(cmbModel, c);
+		c = new CategoryLayoutConstraints("MODELS", 3, 3, 0.05, 0.44, 1);
+		add(cmdSetModel, c);
+		c = new CategoryLayoutConstraints("MODELS", 3, 3, 0.51, 0.44, 1);
+		add(cmdAddModel, c);
+		c = new CategoryLayoutConstraints("MODELS", 4, 4, 0.05, 0.44, 1);
+		add(cmdCopyModel, c);
+		c = new CategoryLayoutConstraints("MODELS", 4, 4, 0.51, 0.44, 1);
+		add(cmdDelModel, c);
+		
+		c = new CategoryLayoutConstraints();
+		add(lblGeneral, c);
+		lblGeneral.setParentObj(this);
+		
+		//add this stuff from updateModelType method (model specific)
+		updateModelSpecificControls();
+		
+		c = new CategoryLayoutConstraints();
+		add(lblTraining, c);
+		lblTraining.setParentObj(this);
+		c = new CategoryLayoutConstraints("TRAINING", 1, 1, 0.05, 0.25, 1);
+		add(lblTrainInputStream, c);
+		c = new CategoryLayoutConstraints("TRAINING", 1, 1, 0.32, 0.63, 1);
+		add(cmbTrainInputStream, c);
+		c = new CategoryLayoutConstraints("TRAINING", 2, 2, 0.05, 0.44, 1);
+		add(cmdTrainDefInputStream, c);
+		c = new CategoryLayoutConstraints("TRAINING", 2, 2, 0.51, 0.44, 1);
+		add(cmdTrainNewInputStream, c);
+		c = new CategoryLayoutConstraints("TRAINING", 3, 3, 0.05, 0.44, 1);
+		add(lblLearnRate, c);
+		c = new CategoryLayoutConstraints("TRAINING", 3, 3, 0.51, 0.44, 1);
+		add(txtLearnRate, c);
+		
+		//add this stuff from updateModelType method (model specific)
+		
+		c = new CategoryLayoutConstraints();
+		add(lblTesting, c);
+		lblTesting.setParentObj(this);
+		c = new CategoryLayoutConstraints("TESTING", 1, 1, 0.05, 0.25, 1);
+		add(lblTestInputStream, c);
+		c = new CategoryLayoutConstraints("TESTING", 1, 1, 0.32, 0.63, 1);
+		add(cmbTestInputStream, c);
+		c = new CategoryLayoutConstraints("TESTING", 2, 2, 0.05, 0.44, 1);
+		add(cmdTestDefInputStream, c);
+		c = new CategoryLayoutConstraints("TESTING", 2, 2, 0.51, 0.44, 1);
+		add(cmdTestNewInputStream, c);
+		
+		
+		
+		//add this stuff from updateModelType method (model specific)
+		
+		c = new CategoryLayoutConstraints();
+		add(lblDataDisplay, c);
+		lblDataDisplay.setParentObj(this);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 1, 1, 0.05, 0.25, 1);
+		add(lblDispShow, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 1, 1, 0.32, 0.63, 1);
+		add(cmbDispShow, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 2, 2, 0.05, 0.9, 1);
+		add(lblDispInput, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 3, 9, 0.05, 0.9, 1);
+		add(bitmapInput, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 9, 9, 0.05, 0.18, 1);
+		add(lblDispSample, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 9, 9, 0.25, 0.24, 1);
+		add(txtDispSample, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 9, 9, 0.53, 0.18, 1);
+		add(lblDispValue, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 9, 9, 0.70, 0.25, 1);
+		add(txtDispValue, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 10, 10, 0.06, 0.22, 1);
+		cmdDispShowFirst.setToolTipText("First");
+		add(cmdDispShowFirst, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 10, 10, 0.28, 0.22, 1);
+		cmdDispShowPrev.setToolTipText("Prev");
+		add(cmdDispShowPrev, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 10, 10, 0.50, 0.22, 1);
+		cmdDispShowNext.setToolTipText("Next");
+		add(cmdDispShowNext, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 10, 10, 0.72, 0.22, 1);
+		cmdDispShowLast.setToolTipText("Last");
+		add(cmdDispShowLast, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 11, 11, 0.05, 0.9, 1);
+		add(chkDispEditable, c);
+		
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 12, 12, 0.05, 0.9, 1);
+		add(lblDispOutput, c);
+		c = new CategoryLayoutConstraints("DATA DISPLAY", 13, 18, 0.05, 0.9, 1);
+		add(bitmapOutput, c);
+		bitmapOutput.setEditable(false);
+		
+		c = new CategoryLayoutConstraints();
+		add(lblExecution, c);
+		lblExecution.setParentObj(this);
+		
+		c = new CategoryLayoutConstraints("EXECUTION", 1, 1, 0.05, 0.25, 1);
+		add(lblExecTask, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 1, 1, 0.32, 0.63, 1);
+		add(cmbExecTask, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 2, 2, 0.05, 0.44, 1);
+		add(cmdExecSetEngine, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 2, 2, 0.51, 0.44, 1);
+		add(cmdExecSetModel, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 3, 3, 0.05, 0.9, 1);
+		add(lblExecControlParams, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 4, 4, 0.07, 0.43, 1);
+		add(lblExecIterStep, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 4, 4, 0.52, 0.43, 1);
+		add(txtExecIterStep, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 5, 5, 0.07, 0.43, 1);
+		add(lblExecStepTo, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 5, 5, 0.52, 0.43, 1);
+		add(txtExecStepTo, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 6, 6, 0.07, 0.43, 1);
+		add(lblExecTimeStep, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 6, 6, 0.52, 0.43, 1);
+		add(txtExecTimeStep, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 7, 7, 0.07, 0.43, 1);
+		add(lblExecPlayRate, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 7, 7, 0.52, 0.43, 1);
+		add(txtExecPlayRate, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 8, 8, 0.07, 0.43, 1);
+		add(lblExecConverge, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 8, 8, 0.52, 0.43, 1);
+		add(txtExecConverge, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 9, 9, 0.05, 0.5, 1);
+		//lblExecExecute.setFont(lblExecExecute.getFont().deriveFont(Font.BOLD));
+		add(lblExecExecute, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 10, 10, 0.05, 0.18, 1);
+		cmdExecReset.setToolTipText("Reset");
+		add(cmdExecReset, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 10, 10, 0.23, 0.18, 1);
+		cmdExecStop.setToolTipText("Stop");
+		add(cmdExecStop, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 10, 10, 0.41, 0.18, 1);
+		cmdExecPlay.setToolTipText("Play");
+		add(cmdExecPlay, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 10, 10, 0.59, 0.18, 1);
+		cmdExecStep.setToolTipText("Step");
+		add(cmdExecStep, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 10, 10, 0.77, 0.18, 1);
+		cmdExecPlayAll.setToolTipText("Play All");
+		add(cmdExecPlayAll, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 11, 11, 0.05, 0.5, 1);
+		add(lblExecSysInfo, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 12, 12, 0.07, 0.43, 1);
+		add(lblExecEnergy, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 12, 12, 0.52, 0.43, 1);
+		add(txtExecEnergy, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 13, 13, 0.07, 0.43, 1);
+		add(lblExecDeltaE, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 13, 13, 0.52, 0.43, 1);
+		add(txtExecDeltaE, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 14, 14, 0.07, 0.43, 1);
+		add(lblExecTime, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 14, 14, 0.52, 0.43, 1);
+		add(txtExecTime, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 15, 15, 0.07, 0.43, 1);
+		add(lblExecIteration, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 15, 15, 0.52, 0.43, 1);
+		add(txtExecIteration, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 16, 16, 0.07, 0.43, 1);
+		add(lblExecSample, c);
+		c = new CategoryLayoutConstraints("EXECUTION", 16, 16, 0.52, 0.43, 1);
+		add(txtExecSample, c);
+		
+		//update all controls
+		resetEngineValues();
+		updateExecControls();
+		updateDisplayEdit();
+	}
+	
+	public void actionPerformed(ActionEvent e) {
+		
+		if (e.getActionCommand().equals("Model Type Changed")){
+			fillModelCombo();
+			return;
+			}
+		
+		if (e.getActionCommand().equals("Model Changed")){
+			if (!updateModel) return;
+			if (cmbModel.getSelectedItem() instanceof AbstractNeuralNet)
+				selectedModel = (AbstractNeuralNet)cmbModel.getSelectedItem();
+			else
+				selectedModel = null;
+			return;
+			}
+		
+		if (e.getActionCommand().equals("Set/Create Model")){
+			if (selectedModel != null){
+				setFromModel(selectedModel);
+				updateUI();
+				return;
+				}
+			//create new
+			AbstractNeuralNet newNet = createModel();
+			if (newNet == null){
+				//TODO throw exception
+				System.out.println("Error creating Neural Net...");
+				return;
+				}
+			displayPanel.addModel(newNet);
+			displayPanel.addGraph(newNet.getGraph());
+			selectedModel = newNet;
+			setFromModel(newNet);
+			updateUI();
+			return;
+			}
+		
+		if (e.getActionCommand().equals("Apply Hopfield General")){
+			if (currentModel == null || !(currentModel instanceof HopfieldNet))
+				return;
+			
+			HopfieldNet net = (HopfieldNet)currentModel;
+			net.setName(txtHopfieldName.getText());
+			net.setUnits(Integer.valueOf(txtHopfieldNodeCount.getText()).intValue(), 1.0);
+			updateUI();
+			return;
+			}
+		
+		if (e.getActionCommand().equals("Set Hopfield Weights")){
+			if (currentModel == null || !(currentModel instanceof HopfieldNet))
+				return;
+			
+			HopfieldNet net = (HopfieldNet)currentModel;
+			int count = net.getUnitCount();
+			double random;
+			double min = Double.valueOf(txtHopfieldWeightMin.getText()).doubleValue();
+			double max = Double.valueOf(txtHopfieldWeightMax.getText()).doubleValue();
+			double mid = (max + min) / 2.0;
+			double sign = 1;
+			ArrayList<Synapse> conns;
+			int start = 0;
+			//NOTE: ensures equal #weights +/- mean
+			for (int i = 0; i < count; i++){
+				conns = net.units.get(i).getAxon().getSynapses();
+				for (int j = start; j < conns.size(); j++){
+					random = mid + sign * (Math.random() * (max - mid));
+					((ReciprocalConnection)conns.get(j)).setWeight(random);
+					sign *= -1;
+					}
+				//prevent reassignment of reciprocal weights
+				start++;
+				}
+			
+			net.fireListeners();
+			//updateUI();
+			return;
+		}
+		
+		if (e.getActionCommand().equals("Toggle Display Editable")){
+			updateDisplayEdit();
+			this.updateUI();
+			return;
+			}
+		
+		if (e.getActionCommand().startsWith("New Input")){
+			//open input dialog, create new input stream
+			InputStreamDialog dialog = new InputStreamDialog(null, this, null);
+			setInputStream = true;
+			dialog.setVisible(true);
+			return;
+			}
+		
+		if (e.getActionCommand().startsWith("Display Show")){
+			if (e.getActionCommand().endsWith("Source")){
+				txtDispSample.setText("0");
+				updateDataDisplay();
+				updateUI();
+				return;
+				}
+			
+			if (cmbDispShow.getSelectedItem().equals("Training"))
+				inputStream = inputTrainStream;
+			else
+				inputStream = inputTestStream;
+			if (inputStream == null) return;
+			int sample = Integer.valueOf(txtDispSample.getText()).intValue();
+			if (sample < 0) sample = 0;
+			int max = inputStream.getMaxSamples();
+			//TODO get last and test sample against it
+			if (e.getActionCommand().endsWith("Next")){
+				if (max < 0 || sample < max - 1)
+					sample++;
+				txtDispSample.setText(String.valueOf(sample));
+				}
+			if (e.getActionCommand().endsWith("Previous")){
+				if (sample > 0)
+					sample--;
+				txtDispSample.setText(String.valueOf(sample));
+				}
+			updateDataDisplay();
+			updateUI();
+			return;
+			}
+		
+		if (e.getActionCommand().startsWith("Display Edit")){
+			if (cmbDispShow.getSelectedItem().equals("Training"))
+				outputStream = outputTrainStream;
+			else
+				outputStream = outputTestStream;
+			if (outputStream == null) return;
+			int sample = Integer.valueOf(txtDispSample.getText()).intValue();
+			if (e.getActionCommand().endsWith("Save")){
+				byte[] b = bitmapInput.getData();
+				try{
+					outputStream.sampleOut(b, sample);
+				}catch (IOException ex){
+					ex.printStackTrace();
+					return;
+					}
+				return;
+				}
+			
+			}
+		
+		if (e.getActionCommand().startsWith("Match")){
+			if (inputTrainStream == null) return;
+			if (e.getActionCommand().endsWith("Hopfield")){
+				txtHopfieldNodeCount.setText("" + inputTrainStream.getSampleSize());
+				updateUI();
+				return;
+				}
+		}
+		
+		//input changed
+		if (e.getActionCommand().startsWith("Input Changed")){
+			if (!updateInput) return;
+			updateInputStream(e.getActionCommand().endsWith("Train"));
+			updateUI();
+			return;
+		}
+		
+		//***EXECUTION***
+		//model execution
+		if (e.getActionCommand().startsWith("Execute Model")){
+			if (engine == null) return;
+			
+			int sample = Integer.valueOf(txtExecSample.getText()).intValue();
+			SimpleEnvironment env = (SimpleEnvironment)engine.getModel().getEnvironment();
+			
+			if (cmbExecTask.getSelectedItem().equals("Train"))
+				env.setMode(AbstractNeuralNet.MODE_TRAIN);
+			else
+				env.setMode(AbstractNeuralNet.MODE_TEST);
+			
+			if (e.getActionCommand().endsWith("Step")){
+				//step once
+				try{
+					engine.setTimeStep(Double.valueOf(txtExecTimeStep.getText()).doubleValue());
+					engine.executeModel(Integer.valueOf(txtExecIterStep.getText()).intValue());
+				}catch (DynamicModelException ex){
+					ex.printStackTrace();
+					return;
+					}
+				
+				updateUI();
+				}
+			
+			
+			//set output if visible/enabled
+			if (((String)cmbDispShow.getSelectedItem()).startsWith((String)cmbExecTask.getSelectedItem())
+			    && bitmapOutput.isVisible() 
+			    && bitmapOutput.isEnabled()) {
+				//update output
+				//bitmapOutput.setData(((SimpleEnvironment)engine.getModel().getEnvironment()).getValues());
+				bitmapOutput.setData(stats.currentSet);
+				
+				bitmapOutput.updateUI();
+				//also update input
+				txtDispSample.setText(txtExecSample.getText());
+				updateDataDisplay();
+				bitmapInput.updateUI();
+				}
+			
+			updateEngineValues();
+			
+			if (cmbExecTask.getSelectedItem().equals("Train")){
+				if (stats.isUpdated() && 
+					Math.abs(Double.valueOf(txtExecDeltaE.getText()).doubleValue()) >=
+					Double.valueOf(txtExecConverge.getText()).doubleValue()){
+					//update weights
+					updateModelWeights();
+				}else{
+					//TODO: learning has converged, move to next sample
+					sample++;
+					txtExecSample.setText("" + sample);
+					txtExecSample.updateUI();
+					double[] inputs = getInputSample(sample);
+					env.setValues(inputs);
+					stats.setTestSet(inputs);
+					}
+				
+			}else{
+				if (true){ //stats.isUpdated() && 
+					//Math.abs(Double.valueOf(txtExecDeltaE.getText()).doubleValue()) >=
+					//		 Double.valueOf(txtExecConverge.getText()).doubleValue()){
+					//let network activity do its thing
+					
+				}else{
+					sample++;
+					txtExecSample.setText("" + sample);
+					txtExecSample.updateUI();
+					double[] inputs = getInputSample(sample);
+					env.setValues(inputs);
+					env.reset();
+					stats.setTestSet(inputs);
+					}
+				
+				}
+			
+			return;
+			}
+		
+		
+		
+		
+		//execute
+		if (e.getActionCommand().startsWith("Execute")){
+			
+			//set engine
+			if (e.getActionCommand().endsWith("Set Engine")){
+				if (cmbExecTask.getSelectedItem().equals("Train"))
+					inputStream = inputTrainStream;
+				else
+					inputStream = inputTestStream;
+				
+				if (currentModel == null || inputStream == null) return;
+				
+				double t = Double.valueOf(txtExecTimeStep.getText()).doubleValue();
+				AbstractNeuralNet copy = (AbstractNeuralNet)currentModel.clone();
+				
+				//((SimpleEnvironment)copy.getEnvironment()).setValues(getInputSample(0));
+				engine = new DynamicModelEngine(t, copy);
+				stats = new SimpleStatistics();
+				
+				//int sample = Integer.valueOf(txtExecSample.getText()).intValue();
+				SimpleEnvironment env = (SimpleEnvironment)((AbstractNeuralNet)engine.getModel()).getEnvironment();
+				if (cmbExecTask.getSelectedItem().equals("Train"))
+					env.setMode(AbstractNeuralNet.MODE_TRAIN);
+				else
+					env.setMode(AbstractNeuralNet.MODE_TEST);
+				env.addListener(stats);
+				env.reset();
+				
+				//TODO put in separate routine that gets called whenever engine's input
+				//	   sample changes
+				double[] sample = getInputSample(0);
+				stats.setTestSet(sample);
+				env.setValues(sample);
+				
+				cmdExecSetEngine.setText("Reset Engine");
+				resetEngineValues();
+				updateExecControls();
+				updateUI();
+				return;
+				}
+			
+			//reset means r
+		
+			
+			//set model from engine
+			if (e.getActionCommand().endsWith("Set Model")){
+				if (engine == null) return;
+				displayPanel.removeModel(currentModel);
+				currentModel = (AbstractNeuralNet)engine.getModel();
+				displayPanel.addModel(currentModel);
+				}
+		
+			}
+		
+	}
+	
+	double[] getInputSample(int i){
+		if (cmbExecTask.getSelectedItem().equals("Train"))
+			inputStream = inputTrainStream;
+		else
+			inputStream = inputTestStream;
+		if (inputStream == null) return null;
+		try{
+			byte[] b = inputStream.sample(i);
+			double[] d = new double[b.length];
+			for (int j = 0; j < d.length; j++)
+				d[j] = inputFunction.evaluate(b[j]);
+			return d;
+		}catch (IOException e){
+			e.printStackTrace();
+			return null;
+			}
+		
+	}
+	
+	void updateInputStream(boolean isTrain){
+		JComboBox combo = cmbTestInputStream;
+		if (isTrain) combo = cmbTrainInputStream;
+		
+		InterfaceInputStream stream = (InterfaceInputStream)combo.getSelectedItem();
+		
+		if (isTrain) 
+			setTrainInputStream(stream);
+		else
+			setTestInputStream(stream);
+		
+		fillInputCombo();
+		
+	}
+	
+	void updateExecControls(){
+		boolean enabled = (currentModel != null);
+		cmdExecSetEngine.setEnabled(enabled);
+		
+		enabled = (engine != null);
+		cmdExecSetModel.setEnabled(enabled);
+		cmdExecReset.setEnabled(enabled);
+		cmdExecStop.setEnabled(enabled);
+		cmdExecPlay.setEnabled(enabled);
+		cmdExecStep.setEnabled(enabled);
+		cmdExecPlayAll.setEnabled(enabled);
+		lblExecSysInfo.setEnabled(enabled);
+		lblExecEnergy.setEnabled(enabled);
+		txtExecEnergy.setEnabled(enabled);
+		lblExecDeltaE.setEnabled(enabled);
+		txtExecDeltaE.setEnabled(enabled);
+		lblExecIteration.setEnabled(enabled);
+		txtExecIteration.setEnabled(enabled);
+		lblExecTime.setEnabled(enabled);
+		txtExecTime.setEnabled(enabled);
+		lblExecSample.setEnabled(enabled);
+		txtExecSample.setEnabled(enabled);
+	}
+	
+	void resetEngineValues(){
+		//if (engine == null){
+			txtExecIteration.setText("0");
+			txtExecEnergy.setText("0.000000");
+			txtExecDeltaE.setText("0.000000");
+			txtExecTime.setText("0.000000");
+			txtExecSample.setText("0");
+			//return;
+			//}
+	}
+	
+	void updateEngineValues(){
+		if (engine == null || stats == null){
+			resetEngineValues();
+			return;
+			}
+		//update from stats
+		DecimalFormat df = new DecimalFormat("#0.000000");
+		txtExecIteration.setText("" + engine.getIterations());
+		double last = Double.valueOf(txtExecEnergy.getText()).doubleValue();
+		double current = ((AbstractNeuralNet)engine.getModel()).getEnergy();
+		//txtExecEnergy.setText(df.format(stats.getRootMeanSquaredError()));
+		txtExecEnergy.setText(df.format(current));
+		txtExecDeltaE.setText(df.format(current - last));
+		//txtExecDeltaE.setText(df.format(stats.getRootMeanSquaredError() - last));
+		txtExecTime.setText(df.format(engine.getClock()));
+		//txtExecSample.setText("0");
+		
+	}
+	
+	void updateModelWeights(){
+		if (!(cmbExecTask.getSelectedItem().equals("Train") && engine != null && stats != null))
+			return;
+		
+		//for each unit, if its error is not zero, adjust its weights
+		double rate = Double.valueOf(txtLearnRate.getText()).doubleValue();
+		ArrayList<ConnectableNeuron> units = ((AbstractNeuralNet)engine.getModel()).units;
+		double[] error = stats.getError();
+		
+		for (int i = 0; i < error.length; i++)
+			if (error[i] != 0){
+				ArrayList<Synapse> synapses = units.get(i).getDendrites().getSynapses();
+				for (int j = 0; j < synapses.size(); j++)
+					if (synapses.get(j) instanceof ReciprocalConnection){
+						ReciprocalConnection conn = (ReciprocalConnection)synapses.get(j);
+						double weight = conn.getWeight();
+						double a_i = stats.currentSet[((DynamicModelEnvironmentSensor)units.get(i)).getIndex()];
+						
+						double a_j = 0;
+						if (conn.reciprocal != null){
+							AbstractNeuron n = (AbstractNeuron)conn.reciprocal.getParent();	
+							if (n instanceof DynamicModelEnvironmentSensor)
+								a_j = stats.previousSet[((DynamicModelEnvironmentSensor)n).getIndex()];
+							}
+						
+						//Widrow-Hoff learning rule
+						//weight += rate * error[i] * in;
+						//weight += rate * conn.getWeight() * in;
+						
+						weight -= rate * a_i * a_j;
+						conn.setWeight(weight);
+						
+						//((WeightedSynapse)synapses.get(j)).setWeight(weight);
+						}
+				}
+		
+	}
+	
+	public boolean setParameters(InterfaceParameters p, int code) {
+		if (p instanceof InputStreamDialog.InputStreamParameters){
+			JComboBox combo = null;
+			if (updateTrainInput){
+				combo = cmbTrainInputStream;
+				//input = inputTrainStream;
+				}
+			else{
+				combo = cmbTestInputStream;
+				//input = inputTestStream;
+				}
+			InputStreamDialog.InputStreamParameters p2 = (InputStreamDialog.InputStreamParameters)p;
+			//TODO make this more generic?
+			if (p2.type.equals("ByteBufferInputStream")){
+				ByteBufferInputStream stream; 
+				if (p2.isNew || combo.getSelectedItem() instanceof ByteBufferInputStream){
+					stream = new ByteBufferInputStream(p2.initSize);
+					stream.setName(p2.name);
+					displayPanel.addDataStream(stream);
+				}else
+					stream = (ByteBufferInputStream)combo.getSelectedItem();
+				stream.setSampleSize(p2.sampleSize);
+				stream.setSampleAll(p2.sampleAll);
+				if (updateTrainInput)
+					setTrainInputStream(stream);
+				else
+					setTestInputStream(stream);
+				//TODO implement channels?
+				//fillInputCombo();
+				updateDataDisplay();
+				//output stream for editing
+				//if (updateTrainInput)
+				//	outputTrainStream = new TempDataBank(stream);
+				//else
+				//	outputTestStream = new TempDataBank(stream);
+				updateUI();
+				return true;
+				}
+			return false;
+			}
+			
+		return false;
+	}
+
+	
+	void updateDisplayEdit(){
+		boolean selected = chkDispEditable.isSelected();
+	
+		if (selected){
+			//add remove edit controls
+			CategoryLayoutConstraints c = new CategoryLayoutConstraints("DATA DISPLAY", 12, 12, 0.07, 0.16, 1);
+			add(lblDispEditValue, c);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 12, 12, 0.25, 0.24, 1);
+			add(txtDispEditValue, c);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 13, 13, 0.07, 0.16, 1);
+			add(lblDispEditBrush, c);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 13, 13, 0.25, 0.24, 1);
+			add(txtDispEditBrush, c);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 12, 12, 0.51, 0.44, 1);
+			add(cmdDispEditSave, c);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 13, 13, 0.51, 0.44, 1);
+			add(cmdDispEditDisc, c);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 14, 14, 0.51, 0.44, 1);
+			add(cmdDispEditAdd, c);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 15, 15, 0.51, 0.44, 1);
+			add(cmdDispEditDel, c);
+			remove(bitmapOutput);
+			remove(lblDispOutput);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 16, 16, 0.05, 0.9, 1);
+			add(lblDispOutput, c);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 17, 23, 0.05, 0.9, 1);
+			add(bitmapOutput, c);
+		}else{
+			remove(lblDispEditValue);
+			remove(txtDispEditValue);
+			remove(lblDispEditBrush);
+			remove(txtDispEditBrush);
+			remove(cmdDispEditAdd);
+			remove(cmdDispEditDel);
+			remove(cmdDispEditSave);
+			remove(cmdDispEditDisc);
+			remove(bitmapOutput);
+			remove(lblDispOutput);
+			
+			CategoryLayoutConstraints c = new CategoryLayoutConstraints("DATA DISPLAY", 12, 12, 0.05, 0.9, 1);
+			add(lblDispOutput, c);
+			c = new CategoryLayoutConstraints("DATA DISPLAY", 13, 19, 0.05, 0.9, 1);
+			add(bitmapOutput, c);
+		}
+		
+		bitmapInput.setEditable(selected);
+		
+	}
+	
+	void updateDataDisplay(){
+		if (cmbDispShow.getSelectedItem().equals("Training"))
+			inputStream = inputTrainStream;
+		else
+			inputStream = inputTestStream;
+		
+		//TODO disable controls here
+		if (inputStream == null) return;
+		
+		//set current sample display
+		int sample = Integer.valueOf(txtDispSample.getText()).intValue();
+		if (sample < 0){
+			sample = 0;
+			txtDispSample.setText("0");
+			}
+		
+		try{
+			byte[] b = inputStream.sample(sample);
+			bitmapInput.setData(b);
+			//updateUI();
+		}catch (IOException e){
+			e.printStackTrace();
+			return;
+			}
+	}
+	
+	AbstractNeuralNet createModel(){
+		if (cmbModelType.getSelectedItem().equals("Hopfield Net")){
+			//default is 5 nodes
+			HopfieldNet net = new HopfieldNet(5);
+			return net;
+			}
+		return null;
+	}
+	
+	void setFromModel(AbstractNeuralNet model){
+		currentModel = selectedModel;
+		updateModelSpecificControls();
+		updateExecControls();
+		
+		//set values from net
+		if (HopfieldNet.class.isInstance(currentModel)){
+			txtHopfieldName.setText(currentModel.getName());
+			txtHopfieldNodeCount.setText("" + currentModel.getUnitCount());
+			}
+	}
+	
+	void updateModelSpecificControls(){
+		removeAllControls();
+		
+		//add correct ones
+		if (currentModel == null) return;
+		CategoryLayoutConstraints c;
+		if (HopfieldNet.class.isInstance(currentModel)){
+			//General
+			c = new CategoryLayoutConstraints("GENERAL", 1, 1, 0.05, 0.45, 1);
+			add(lblHopfieldName, c);
+			c = new CategoryLayoutConstraints("GENERAL", 1, 1, 0.52, 0.43, 1);
+			add(txtHopfieldName, c);
+			c = new CategoryLayoutConstraints("GENERAL", 2, 2, 0.05, 0.45, 1);
+			add(lblHopfieldNodeCount, c);
+			c = new CategoryLayoutConstraints("GENERAL", 2, 2, 0.52, 0.43, 1);
+			add(txtHopfieldNodeCount, c);
+			c = new CategoryLayoutConstraints("GENERAL", 3, 3, 0.05, 0.44, 1);
+			add(cmdHopfieldMatchSample, c);
+			c = new CategoryLayoutConstraints("GENERAL", 3, 3, 0.51, 0.44, 1);
+			add(cmdHopfieldApplyGeneral, c);
+			
+			//Training
+			c = new CategoryLayoutConstraints("TRAINING", 4, 4, 0.05, 0.44, 1);
+			add(lblHopfieldWeights, c);
+			c = new CategoryLayoutConstraints("TRAINING", 4, 4, 0.51, 0.44, 1);
+			add(cmdHopfieldInitWeights, c);
+			c = new CategoryLayoutConstraints("TRAINING", 5, 5, 0.07, 0.18, 1);
+			add(lblHopfieldWeightMax, c);
+			c = new CategoryLayoutConstraints("TRAINING", 5, 5, 0.25, 0.24, 1);
+			add(txtHopfieldWeightMax, c);
+			c = new CategoryLayoutConstraints("TRAINING", 5, 5, 0.53, 0.18, 1);
+			add(lblHopfieldWeightMin, c);
+			c = new CategoryLayoutConstraints("TRAINING", 5, 5, 0.70, 0.25, 1);
+			add(txtHopfieldWeightMin, c);
+			c = new CategoryLayoutConstraints("TRAINING", 6, 6, 0.05, 0.25, 1);
+			add(lblHopfieldNameMap, c);
+			c = new CategoryLayoutConstraints("TRAINING", 6, 6, 0.32, 0.63, 1);
+			add(cmbHopfieldNameMap, c);
+			c = new CategoryLayoutConstraints("TRAINING", 6, 6, 0.51, 0.44, 1);
+			add(cmdHopfieldNewNameMap, c);
+			
+			
+			return;
+			}
+		
+	}
+	
+	void removeAllControls(){
+		/*
+		remove(lblHopfieldInput);
+		remove(cmbHopfieldInput);
+		remove(cmdHopfieldDefInput);
+		remove(cmdHopfieldNewInput);
+		*/
+		remove(lblHopfieldWeights);
+		remove(lblHopfieldWeightMax);
+		remove(txtHopfieldWeightMax);
+		remove(lblHopfieldWeightMin);
+		remove(txtHopfieldWeightMin);
+		remove(lblHopfieldNameMap);
+		remove(cmbHopfieldNameMap);
+		remove(cmdHopfieldNewNameMap);
+		
+	}
+	
+	void fillModelTypeCombo(){
+		cmbModelType.removeAllItems();
+		cmbModelType.addItem("Hopfield Net");
+		cmbModelType.addItem("Perceptron");
+		cmbModelType.addItem("Kohonen Net");
+	}
+	
+	void fillModelCombo(){
+		updateModel = false;
+		Class test = InterfaceAbstractModel.class;
+		cmbModel.removeAllItems();
+		cmbModel.addItem("<--new-->");
+		if (cmbModelType.getSelectedItem() == null) return;
+		if (cmbModelType.getSelectedItem().equals("Hopfield Net"))
+			test = HopfieldNet.class;
+		if (cmbModelType.getSelectedItem().equals("Perceptron"))
+			test = PerceptronNet.class;
+		if (cmbModelType.getSelectedItem().equals("Kohonen Net"))
+			test = KohonenNet.class;
+		
+		boolean modelFound = false;
+		ArrayList<InterfaceAbstractModel> models = displayPanel.models;
+		for (int i = 0; i < models.size(); i++)
+			if (test.isInstance(models.get(i))){
+				cmbModel.addItem(models.get(i));
+				modelFound = (selectedModel != null && selectedModel.equals(models.get(i)));
+				}
+		
+		if (modelFound)
+			cmbModel.setSelectedItem(selectedModel);
+		
+		if (cmbModel.getSelectedItem().equals("<--new-->"))
+			cmdSetModel.setText("Create");
+		else
+			cmdSetModel.setText("Set");
+		updateModel = true;
+	}
+	
+	void fillInputCombo(){
+		updateInput = false;
+		ArrayList<InterfaceDataStream> streams = displayPanel.streams;
+		cmbTrainInputStream.removeAllItems();
+		cmbTestInputStream.removeAllItems();
+		boolean trainFound = false, testFound = false;
+		for (int i = 0; i < streams.size(); i++)
+			if (streams.get(i) instanceof InterfaceInputStream){
+				cmbTrainInputStream.addItem(streams.get(i));
+				cmbTestInputStream.addItem(streams.get(i));
+				if (inputTrainStream != null && streams.get(i) == inputTrainStream)
+					trainFound = true;
+				if (inputTestStream != null && streams.get(i) == inputTestStream)
+					testFound = true;
+				}
+		
+		if (trainFound)
+			cmbTrainInputStream.setSelectedItem(inputTrainStream);
+		else if (cmbTrainInputStream.getItemCount() > 0)
+			setTrainInputStream((InterfaceInputStream)cmbTrainInputStream.getSelectedItem());
+		
+		if (testFound)
+			cmbTestInputStream.setSelectedItem(inputTestStream);
+		else if (cmbTestInputStream.getItemCount() > 0)
+			setTestInputStream((InterfaceInputStream)cmbTestInputStream.getSelectedItem());
+		updateInput = true;
+	}
+	
+	void setTestInputStream(InterfaceInputStream stream){
+		inputTestStream = stream;
+		if (stream instanceof ByteBufferInputStream)
+		outputTestStream = new TempDataBank((ByteBufferInputStream)stream);
+	}
+	
+	void setTrainInputStream(InterfaceInputStream stream){
+		inputTrainStream = stream;
+		if (stream instanceof ByteBufferInputStream)
+		outputTrainStream = new TempDataBank((ByteBufferInputStream)stream);
+	}
+	
+	public void paintComponent(Graphics g){
+		fillModelCombo();
+		fillInputCombo();
+		super.paintComponent(g);
+	}
+	
+	public String toString(){
+		return "Neuro Net Panel";
+	}
+	
+	class HopfieldOptions{
+		boolean sampleAll;
+		int sampleSize;
+		int sampleCount;
+		boolean useAllSamples;
+	}
+
+}

@@ -1,0 +1,8 @@
+bin
+<<<<<<< TREE
+.project
+.classpath
+=======
+bin
+>>>>>>> MERGE-SOURCE
+.bzrignore
