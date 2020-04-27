@@ -25,7 +25,6 @@ import java.util.ArrayList;
 import mgui.interfaces.attributes.Attribute;
 import mgui.interfaces.io.InterfaceDataSource;
 import mgui.interfaces.neuro.InterfaceNeuroComponentListener;
-import mgui.interfaces.neuro.NeuroComponentEvent;
 import mgui.interfaces.trees.InterfaceTreeNode;
 import mgui.models.dynamic.DynamicModelComponent;
 import mgui.models.networks.AbstractNetwork;

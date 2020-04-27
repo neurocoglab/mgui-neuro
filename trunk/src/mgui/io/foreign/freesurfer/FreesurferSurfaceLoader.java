@@ -26,7 +26,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteOrder;
 
-import javax.vecmath.Point3f;
+import org.jogamp.vecmath.Point3f;
 
 import mgui.geometry.Mesh3D;
 import mgui.interfaces.InterfaceSession;

@@ -27,7 +27,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.ReadableByteChannel;
 
-import javax.vecmath.Point3f;
+import org.jogamp.vecmath.Point3f;
 
 import mgui.geometry.Polygon3D;
 import mgui.interfaces.gui.InterfaceProgressBar;

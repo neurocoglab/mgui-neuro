@@ -20,8 +20,6 @@
 
 package mgui.neuro.networks;
 
-import edu.uci.ics.jung.graph.DirectedGraph;
-
 public class PerceptronNet extends AbstractNeuralNet {
 
 	public double getEnergy(){

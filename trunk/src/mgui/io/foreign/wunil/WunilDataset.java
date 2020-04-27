@@ -32,8 +32,8 @@ import java.util.ArrayList;
 import java.util.StringTokenizer;
 import java.util.zip.GZIPInputStream;
 
-import javax.vecmath.Point3f;
-import javax.vecmath.Vector3f;
+import org.jogamp.vecmath.Point3f;
+import org.jogamp.vecmath.Vector3f;
 
 import mgui.datasources.DataType;
 import mgui.geometry.Box3D;

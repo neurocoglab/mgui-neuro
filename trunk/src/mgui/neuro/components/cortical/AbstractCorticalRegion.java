@@ -22,7 +22,7 @@ package mgui.neuro.components.cortical;
 
 import java.util.Comparator;
 
-import javax.vecmath.Point3f;
+import org.jogamp.vecmath.Point3f;
 
 import mgui.neuro.components.AbstractNeuroComponent;
 

@@ -26,7 +26,7 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.StringTokenizer;
 
-import javax.vecmath.Matrix4d;
+import org.jogamp.vecmath.Matrix4d;
 
 import mgui.interfaces.ProgressUpdater;
 import mgui.interfaces.gui.InterfaceProgressBar;

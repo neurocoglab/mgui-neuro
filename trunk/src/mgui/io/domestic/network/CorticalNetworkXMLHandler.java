@@ -23,7 +23,7 @@ package mgui.io.domestic.network;
 import java.util.ArrayList;
 import java.util.StringTokenizer;
 
-import javax.vecmath.Point3f;
+import org.jogamp.vecmath.Point3f;
 
 import mgui.neuro.components.cortical.AbstractCorticalConnection;
 import mgui.neuro.components.cortical.AbstractCorticalRegion;

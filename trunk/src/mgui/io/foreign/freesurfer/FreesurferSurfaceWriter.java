@@ -27,7 +27,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 
-import javax.vecmath.Point3f;
+import org.jogamp.vecmath.Point3f;
 
 import mgui.geometry.Mesh3D;
 import mgui.geometry.Mesh3D.MeshFace3D;

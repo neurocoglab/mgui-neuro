@@ -23,8 +23,9 @@ package mgui.interfaces.shapes.neuro;
 import java.awt.Color;
 import java.util.ArrayList;
 
-import javax.media.j3d.BranchGroup;
 import javax.swing.ImageIcon;
+
+import org.jogamp.java3d.BranchGroup;
 
 import mgui.geometry.Plane3D;
 import mgui.geometry.util.GeometryFunctions;
