@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2014 Andrew Reid and the ModelGUI Project <http://mgui.wikidot.com>
+* Copyright (C) 2020 Andrew Reid and the ModelGUI Project <http://www.modelgui.org>
 * 
 * This file is part of ModelGUI[neuro] (mgui-neuro).
 * 
@@ -207,6 +207,13 @@ public class NeuroMeshEngine implements Engine {
 	public void setAttributes(AttributeList attribute_list) {
 		// TODO Auto-generated method stub
 
+	}
+
+
+	@Override
+	public Object getAttributeValue(String name) {
+		// TODO Auto-generated method stub
+		return null;
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
-* Copyright (C) 2014 Andrew Reid and the ModelGUI Project <http://mgui.wikidot.com>
+* Copyright (C) 2020 Andrew Reid and the ModelGUI Project <http://www.modelgui.org>
 * 
 * This file is part of ModelGUI[neuro] (mgui-neuro).
 * 
@@ -215,6 +215,13 @@ public class PulseTrainUpdater extends SimpleEnvironmentUpdater {
 
 		public void setAttributes(AttributeList thisList) {
 			attributes = thisList;
+		}
+		
+		@Override
+		public Object getAttributeValue(String name) {
+			Attribute<?> attribute = getAttribute(name);
+			if (attribute == null) return null;
+			return attribute.getValue();
 		}
 		
 		public void setTreeNode(InterfaceTreeNode treeNode){
