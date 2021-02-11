@@ -22,6 +22,7 @@ package mgui.io.foreign.caret;
 
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.util.List;
 
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
@@ -34,6 +35,7 @@ import mgui.interfaces.io.InterfaceFilePanel;
 import mgui.interfaces.layouts.LineLayout;
 import mgui.interfaces.layouts.LineLayoutConstraints;
 import mgui.interfaces.shapes.Mesh3DInt;
+import mgui.interfaces.shapes.Shape3DInt;
 import mgui.interfaces.shapes.ShapeSet3DInt;
 
 
@@ -92,9 +94,17 @@ public class CaretMetricOptionsDialog extends InterfaceDialogBox implements Acti
 		cmbMesh.removeAllItems();
 		
 		InterfaceFilePanel panel = (InterfaceFilePanel)parentPanel;
-		ShapeSet3DInt meshes = InterfaceSession.getDisplayPanel().getCurrentShapeSet().getShapeType(new Mesh3DInt());
-		for (int i = 0; i < meshes.members.size(); i++)
-			cmbMesh.addItem(meshes.members.get(i));
+		
+		List<Shape3DInt> meshes = InterfaceSession.getDisplayPanel().getCurrentShapeSet().getShapeType(new Mesh3DInt());
+		for (Shape3DInt mesh : meshes) {
+			cmbMesh.addItem(mesh);
+			}
+		
+//		ShapeSet3DInt meshes = InterfaceSession.getDisplayPanel().getCurrentShapeSet().getShapeType(new Mesh3DInt());
+//		for (int i = 0; i < meshes.members.size(); i++)
+//			cmbMesh.addItem(meshes.members.get(i));
+		
+		
 	}
 	
 	public Mesh3DInt getMesh(){

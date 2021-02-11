@@ -30,7 +30,11 @@ import java.util.HashMap;
 import java.util.StringTokenizer;
 
 import org.jogamp.vecmath.Point3f;
+import org.xml.sax.Attributes;
+import org.xml.sax.SAXException;
+import org.xml.sax.helpers.DefaultHandler;
 
+import Jama.Matrix;
 import mgui.geometry.Mesh3D;
 import mgui.interfaces.InterfaceSession;
 import mgui.interfaces.logs.LoggingType;
@@ -40,15 +44,6 @@ import mgui.numbers.MguiFloat;
 import mgui.numbers.MguiInteger;
 import mgui.numbers.MguiNumber;
 import mgui.numbers.MguiShort;
-
-import org.xml.sax.Attributes;
-import org.xml.sax.SAXException;
-import org.xml.sax.helpers.DefaultHandler;
-
-import Jama.Matrix;
-
-import com.sun.org.apache.xml.internal.security.exceptions.Base64DecodingException;
-import com.sun.org.apache.xml.internal.security.utils.Base64;
 
 /**********************************************************
  * XML handler for GIFTI format surface files. See <a href="http://www.nitrc.org/projects/gifti/">
@@ -341,7 +336,7 @@ public class GiftiXMLHandler extends DefaultHandler {
 						// First, decode
 						Charset charset = Charset.forName("UTF-8");
 						byte[] utf8_bytes = data_buffer.toString().getBytes(charset);
-						byte[] b_data = Base64.decode(utf8_bytes);
+						byte[] b_data = java.util.Base64.getDecoder().decode(utf8_bytes);
 						
 						if (da_encode.startsWith("GZip")){
 							// If necessary, decompress
@@ -407,7 +402,7 @@ public class GiftiXMLHandler extends DefaultHandler {
 						
 						}
 					
-				}catch (Base64DecodingException ex){
+				}catch (IllegalArgumentException ex){
 					//ex.printStackTrace();
 					throw new SAXException ("GiftiXMLHandler: Error decoding data; encoding is: " + da_encode);
 				}catch (IOException ex){

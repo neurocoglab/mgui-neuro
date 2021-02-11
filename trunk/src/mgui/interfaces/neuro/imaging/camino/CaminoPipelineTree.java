@@ -30,6 +30,7 @@ import java.awt.event.MouseListener;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.List;
 
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
@@ -75,6 +76,10 @@ public class CaminoPipelineTree extends JTree implements PopupMenuObject, MouseL
 	}
 	
 	public InterfacePopupMenu getPopupMenu(){
+		return null;
+	}
+	
+	public InterfacePopupMenu getPopupMenu(List<Object> selected){
 		return null;
 	}
 	

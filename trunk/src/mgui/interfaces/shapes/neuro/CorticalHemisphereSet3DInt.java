@@ -310,7 +310,7 @@ public class CorticalHemisphereSet3DInt extends Mesh3DInt {
 		if (middle_mesh != null)
 			set.addShape(middle_mesh.getShape2DInt(plane, above_dist, below_dist, false));
 		
-		set.getAttributes().setIntersection(attributes);
+		set.getAttributes().setIntersection(getInheritedAttributes());
 		return set;
 	}
 	

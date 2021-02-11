@@ -27,6 +27,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.TreeSet;
 
 import javax.swing.Icon;
@@ -390,15 +391,18 @@ public class InterfaceCorticalThicknessPanel extends InterfacePanel implements A
 	
 	void updateShapeSetList(){
 		InterfaceDisplayPanel displayPanel = InterfaceSession.getDisplayPanel();
-		ShapeSet3DInt sets = displayPanel.getCurrentShapeSet().getShapeType(new ShapeSet3DInt());
+		//ShapeSet3DInt sets = displayPanel.getCurrentShapeSet().getShapeType(new ShapeSet3DInt());
+		
+		List<Shape3DInt> sets = InterfaceSession.getDisplayPanel().getCurrentShapeSet().getShapeType(new ShapeSet3DInt());
+		
 		boolean set_found = false;
 		cmbSubjectShapeSet.removeAllItems();
 		cmbSubjectShapeSet.addItem(displayPanel.getCurrentShapeSet());
 		if (parent_set == displayPanel.getCurrentShapeSet())
 			set_found = true;
-		for (int i = 0; i < sets.members.size(); i++){
-			cmbSubjectShapeSet.addItem(sets.members.get(i));
-			if (parent_set != null && shape_set == sets.members.get(i))
+		for (int i = 0; i < sets.size(); i++){
+			cmbSubjectShapeSet.addItem(sets.get(i));
+			if (parent_set != null && shape_set == sets.get(i))
 				set_found = true;
 			}
 		if (set_found)

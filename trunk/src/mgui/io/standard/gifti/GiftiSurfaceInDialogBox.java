@@ -23,6 +23,7 @@ package mgui.io.standard.gifti;
 
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
+import java.util.List;
 
 import javax.swing.JCheckBox;
 import javax.swing.JFrame;
@@ -32,6 +33,7 @@ import mgui.interfaces.gui.InterfaceComboBox;
 import mgui.interfaces.gui.InterfaceComboBox.RenderMode;
 import mgui.interfaces.layouts.LineLayoutConstraints;
 import mgui.interfaces.shapes.Mesh3DInt;
+import mgui.interfaces.shapes.Shape3DInt;
 import mgui.interfaces.shapes.ShapeModel3D;
 import mgui.interfaces.shapes.ShapeSet3DInt;
 import mgui.io.InterfaceIOOptions;
@@ -103,10 +105,14 @@ public class GiftiSurfaceInDialogBox extends SurfaceInputDialogBox {
 		ArrayList<ShapeModel3D> models = InterfaceSession.getWorkspace().getShapeModels();
 		
 		for (int j = 0; j < models.size(); j++){
-			ShapeSet3DInt meshes = models.get(j).getModelSet().getShapeType(new Mesh3DInt());
+//			ShapeSet3DInt meshes = models.get(j).getModelSet().getShapeType(new Mesh3DInt());
+			List<Shape3DInt> meshes = InterfaceSession.getDisplayPanel().getCurrentShapeSet().getShapeType(new Mesh3DInt());
+			for (Shape3DInt mesh : meshes) {
+				cmbSurface.addItem(mesh);
+				}
 			
-			for (int i = 0; i < meshes.members.size(); i++)
-				cmbSurface.addItem(meshes.members.get(i));
+//			for (int i = 0; i < meshes.members.size(); i++)
+//				cmbSurface.addItem(meshes.members.get(i));
 			}
 	
 		if (current_surface == null){

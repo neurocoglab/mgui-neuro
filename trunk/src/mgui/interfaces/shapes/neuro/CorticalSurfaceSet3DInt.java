@@ -256,7 +256,7 @@ public class CorticalSurfaceSet3DInt extends Mesh3DInt {
 		if (right != null)
 			set.addShape(right.getShape2DInt(plane, above_dist, below_dist, false));
 		
-		set.getAttributes().setIntersection(attributes);
+		set.getAttributes().setIntersection(getInheritedAttributes());
 		return set;
 	}
 	

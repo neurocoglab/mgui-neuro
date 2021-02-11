@@ -201,18 +201,22 @@ public class PulseTrainUpdater extends SimpleEnvironmentUpdater {
 			return ((MguiDouble)attributes.getValue("Amplitude[mA]")).getValue();
 		}
 		
-		public Attribute getAttribute(String attrName) {	
+		@Override
+		public Attribute<?> getAttribute(String attrName) {	
 			return attributes.getAttribute(attrName);
 		}
 
+		@Override
 		public AttributeList getAttributes() {
 			return attributes;
 		}
 
+		@Override
 		public void setAttribute(String attrName, Object newValue) {
 			attributes.setValue(attrName, newValue);	
 		}
 
+		@Override
 		public void setAttributes(AttributeList thisList) {
 			attributes = thisList;
 		}

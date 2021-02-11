@@ -28,11 +28,10 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 
-import org.jogamp.vecmath.Color3f;
 import org.jogamp.vecmath.Color4f;
 import org.jogamp.vecmath.Point3f;
 
-import com.sun.org.apache.xml.internal.security.utils.Base64;
+import java.util.Base64;
 
 import mgui.geometry.Mesh3D;
 import mgui.geometry.Mesh3D.MeshFace3D;
@@ -412,7 +411,7 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		
 		// Now encode as Base64
 		// Finally, write string to file
-		writer.write(Base64.encode(data_out.array()));
+		writer.write(Base64.getEncoder().encodeToString(data_out.array()));
 		
 	}
 	
@@ -442,7 +441,7 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		
 		// Now encode as Base64
 		// Finally, write string to file
-		writer.write(Base64.encode(data_out.array()));
+		writer.write(Base64.getEncoder().encodeToString(data_out.array()));
 		
 	}
 	
@@ -476,7 +475,7 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		
 		// Now encode as Base64
 		// Finally, write string to file
-		writer.write(Base64.encode(data_out.array()));
+		writer.write(Base64.getEncoder().encodeToString(data_out.array()));
 		
 	}
 	
@@ -534,7 +533,7 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		
 		// Now encode as Base64
 		// Finally, write string to file
-		writer.write(Base64.encode(data_out.array()));
+		writer.write(Base64.getEncoder().encodeToString(data_out.array()));
 		
 	}
 	

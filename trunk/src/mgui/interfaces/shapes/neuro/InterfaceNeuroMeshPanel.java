@@ -24,6 +24,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -31,10 +32,12 @@ import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JTextField;
+
 import org.jogamp.vecmath.Point3f;
 import org.jogamp.vecmath.Vector3f;
 
-import mgui.geometry.Box3D;
+import foxtrot.Job;
+import foxtrot.Worker;
 import mgui.geometry.Grid3D;
 import mgui.geometry.Mesh3D;
 import mgui.geometry.mesh.MeshFunctions;
@@ -49,10 +52,9 @@ import mgui.interfaces.layouts.CategoryLayoutConstraints;
 import mgui.interfaces.layouts.CategoryTitle;
 import mgui.interfaces.shapes.Mesh3DInt;
 import mgui.interfaces.shapes.SectionSet3DInt;
+import mgui.interfaces.shapes.Shape3DInt;
 import mgui.interfaces.shapes.ShapeSet3DInt;
 import mgui.interfaces.shapes.Volume3DInt;
-import foxtrot.Job;
-import foxtrot.Worker;
 
 
 public class InterfaceNeuroMeshPanel extends InterfacePanel implements ActionListener {
@@ -279,12 +281,12 @@ public class InterfaceNeuroMeshPanel extends InterfacePanel implements ActionLis
 		update_combos = false;
 		Volume3DInt current_volume = (Volume3DInt)cmbScalpT1Volume.getSelectedItem();
 		cmbScalpT1Volume.removeAllItems();
-		Volume3DInt volume = new Volume3DInt();
 		ShapeSet3DInt current_set = InterfaceSession.getDisplayPanel().getCurrentShapeSet();
-		ShapeSet3DInt shape_set = current_set.getShapeType(volume, true);
+		List<Shape3DInt> shapes = current_set.getShapeType(new Volume3DInt());
 		
-		for (int i = 0; i < shape_set.members.size(); i++)
-			cmbScalpT1Volume.addItem(shape_set.members.get(i));
+		for (Shape3DInt shape : shapes) {
+			cmbScalpT1Volume.addItem(shape);
+			}
 		
 		if (current_volume != null)
 			cmbScalpT1Volume.setSelectedItem(current_volume);
@@ -294,10 +296,11 @@ public class InterfaceNeuroMeshPanel extends InterfacePanel implements ActionLis
 		SectionSet3DInt current_section_set = (SectionSet3DInt)cmbScalpSectionSet.getSelectedItem();
 		cmbScalpSectionSet.removeAllItems();
 		SectionSet3DInt section_set = new SectionSet3DInt();
-		shape_set = current_set.getShapeType(section_set, true);
+		shapes = current_set.getShapeType(new SectionSet3DInt());
 		
-		for (int i = 0; i < shape_set.members.size(); i++)
-			cmbScalpSectionSet.addItem(shape_set.members.get(i));
+		for (Shape3DInt shape : shapes) {
+			cmbScalpSectionSet.addItem(shape);
+			}
 		
 		if (current_section_set != null)
 			cmbScalpSectionSet.setSelectedItem(current_section_set);
@@ -306,11 +309,11 @@ public class InterfaceNeuroMeshPanel extends InterfacePanel implements ActionLis
 		Mesh3DInt current_mesh = (Mesh3DInt)cmbScalpBrainSurface.getSelectedItem();
 		cmbScalpBrainSurface.removeAllItems();
 		
-		Mesh3DInt mesh = new Mesh3DInt();
-		shape_set = current_set.getShapeType(mesh, true);
+		shapes = current_set.getShapeType(new Mesh3DInt());
 		
-		for (int i = 0; i < shape_set.members.size(); i++)
-			cmbScalpBrainSurface.addItem(shape_set.members.get(i));
+		for (Shape3DInt shape : shapes) {
+			cmbScalpBrainSurface.addItem(shape);
+			}
 		
 		if (current_mesh != null)
 			cmbScalpBrainSurface.setSelectedItem(current_mesh);
@@ -319,10 +322,12 @@ public class InterfaceNeuroMeshPanel extends InterfacePanel implements ActionLis
 		
 		ShapeSet3DInt set = new ShapeSet3DInt();
 		cmbScalpShapeSet.addItem(current_set);
-		shape_set = current_set.getShapeType(set, true);
 		
-		for (int i = 0; i < shape_set.members.size(); i++)
-			cmbScalpShapeSet.addItem(shape_set.members.get(i));
+		shapes = current_set.getShapeType(new ShapeSet3DInt());
+		
+		for (Shape3DInt shape : shapes) {
+			cmbScalpShapeSet.addItem(shape);
+			}
 		
 		update_combos = true;
 	}
