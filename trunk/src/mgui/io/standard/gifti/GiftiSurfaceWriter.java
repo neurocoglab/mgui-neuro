@@ -27,11 +27,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
+import java.util.Base64;
 
 import org.jogamp.vecmath.Color4f;
 import org.jogamp.vecmath.Point3f;
-
-import java.util.Base64;
 
 import mgui.geometry.Mesh3D;
 import mgui.geometry.Mesh3D.MeshFace3D;
@@ -40,15 +39,19 @@ import mgui.interfaces.ProgressUpdater;
 import mgui.interfaces.io.InterfaceIOType;
 import mgui.interfaces.logs.LoggingType;
 import mgui.interfaces.maps.ColourMap;
+import mgui.interfaces.maps.DiscreteColourMap;
+import mgui.interfaces.maps.NameMap;
 import mgui.interfaces.shapes.Mesh3DInt;
 import mgui.interfaces.shapes.VertexDataColumn;
 import mgui.interfaces.xml.XMLFunctions;
 import mgui.io.InterfaceIOOptions;
 import mgui.io.domestic.shapes.SurfaceFileWriter;
+import mgui.io.standard.gifti.GiftiOutputOptions.NiftiIntent;
 import mgui.io.util.IoFunctions;
 import mgui.numbers.MguiDouble;
 import mgui.numbers.MguiInteger;
 import mgui.numbers.MguiNumber;
+import mgui.util.Colour;
 
 /****************************************************************
  * Writes a surface to Gifti format. See <a href="http://www.nitrc.org/projects/gifti/">
@@ -80,6 +83,7 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		try{
 			String tab1 = "\t";
 			String tab2 = "\t\t";
+			String tab3 = "\t\t\t";
 			
 			Mesh3D mesh = mesh_int.getMesh();
 			
@@ -119,13 +123,49 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 					break;
 				}
 			
+			// LabelTable?
+			NameMap label_nmap = null;
+			DiscreteColourMap label_cmap = null;
+			if (_options.write_columns.size() > 0){
+				for (int i = 0; i < _options.nifti_intents.size(); i++){
+					if (_options.nifti_intents.get(i) == NiftiIntent.NIFTI_INTENT_LABEL) {
+						
+						VertexDataColumn vcolumn = mesh_int.getVertexDataColumn(_options.write_columns.get(i));
+
+						ColourMap cmap = vcolumn.getColourMap();
+						if (cmap instanceof DiscreteColourMap) {
+							label_cmap = (DiscreteColourMap)cmap;
+							// First column with labels defines the table; for some reason,
+							// GIFTI only allows one table
+							continue;
+							}
+						
+						}
+					}
+				
+				}
+			
 			BufferedWriter writer = new BufferedWriter(new java.io.FileWriter(dataFile));
 			
 			// Header
 			writer.write(XMLFunctions.getXMLHeader());
 			writer.write("\n" + GIFTI_HEADER);
 			writer.write("\n" + tab1 + "<MetaData/>");
-			writer.write("\n" + tab1 + "<LabelTable/>");
+			if (label_cmap == null) {
+				writer.write("\n" + tab1 + "<LabelTable/>");
+			} else {
+				writer.write("\n" + tab1 + "<LabelTable>");
+				for (int idx : label_cmap.getIndices()) {
+					writer.write("\n" + tab2 + "<Label Key='" + idx + "'");
+					Colour clr = label_cmap.getColour(idx);
+					writer.write("\n" + tab3 + "Red='" + clr.getRed() + "'" +
+								 "\n" + tab3 + "Green='" + clr.getGreen() + "'" +
+								 "\n" + tab3 + "Blue='" + clr.getBlue() + "'" +
+								 "\n" + tab3 + "Alpha='" + clr.getAlpha() + "' />");
+					}
+				
+				writer.write("\n" + tab1 + "</LabelTable>");
+				}
 			
 			// Coordinates
 			writer.write("\n" + tab1 + "<DataArray Intent='NIFTI_INTENT_POINTSET'" +
@@ -201,6 +241,8 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 			if (_options.write_columns.size() > 0){
 				for (int i = 0; i < _options.write_columns.size(); i++){
 					VertexDataColumn this_column = mesh_int.getVertexDataColumn(_options.write_columns.get(i));
+					String number_format = _options.write_formats.get(i);
+					NiftiIntent nifti_intent = _options.nifti_intents.get(i);
 					
 					boolean write_data = false;
 					boolean write_rgb = false;
@@ -228,7 +270,7 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 					
 					if (write_data){
 						// Write data column
-						writeVertexData(writer, this_column, _options);
+						writeVertexData(writer, this_column, _options, number_format, nifti_intent);
 						}
 					
 					if (write_rgb){
@@ -257,7 +299,8 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		return false;
 	}
 	
-	protected void writeVertexData(BufferedWriter writer, VertexDataColumn this_column, GiftiOutputOptions _options) throws IOException{
+	protected void writeVertexData(BufferedWriter writer, VertexDataColumn this_column, GiftiOutputOptions _options,
+								   String number_format, NiftiIntent nifti_intent) throws IOException{
 		
 		String tab1 = "\t";
 		String tab2 = "\t\t";
@@ -273,19 +316,38 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 				break;
 			}
 		
+		// Encoding string
+		String encoding = null;
+		switch(_options.encoding){
+			case Ascii:
+				encoding = "ASCII";
+				break;
+			case Base64Binary:
+				encoding = "Base64Binary";
+				break;
+			case GzipBase64Binary:
+				encoding = "GZipBase64Binary";
+				break;
+			case ExternalFileBinary:
+				encoding = "ExternalFileBinary";
+				InterfaceSession.log("GiftiSurfaceWriter: Type 'ExternalFileBinary' not implemented.",
+									 LoggingType.Errors);
+				return;
+			}
+		
 		ArrayList<MguiNumber> data = this_column.getData();
 		
 		String dt = getGiftiDatatype(this_column.getDataTransferType());
-		writer.write("\n" + tab1 + "<DataArray Intent='NIFTI_INTENT_VERTEXDATA'" +
+		writer.write("\n" + tab1 + "<DataArray Intent='" + nifti_intent + "'" +
 				"\n" + tab2 + "DataType='" + dt + "'" +
 				"\n" + tab2 + "ArrayIndexingOrder='RowMajorOrder'" +
 				"\n" + tab2 + "Dimensionality='1'" + 
 				"\n" + tab2 + "Dim0='" + data.size() + "'" +
-				"\n" + tab2 + "Encoding='" + _options.encoding + "'" +
+				"\n" + tab2 + "Encoding='" + encoding + "'" +
 				"\n" + tab2 + "Endian='" + _options.byte_order + "'" +
 				"\n" + tab2 + "ExternalFileName=''" +
 				"\n" + tab2 + "ExternalFileOffset='' >");
-		writer.write("\n" + tab2 + "<MetaData/>");
+		writer.write("\n" + tab2 + "<MetaData Name='" + this_column.getName() + "'/>");
 		writer.write("\n" + tab2 + "<CoordinateSystemTransformMatrix/>");
 		writer.write("\n" + tab2 + "<Data>");
 		
@@ -298,7 +360,9 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 				writeBinaryArray(writer, data, false, b_order);
 				break;
 			case Ascii:
-				writeAsciiArray(writer, data, this_column.getDataTransferType() == DataBuffer.TYPE_INT ? 0 : _options.decimal_places);
+				//writeAsciiArray(writer, data, this_column.getDataTransferType() == DataBuffer.TYPE_INT ? 0 : _options.decimal_places);
+				writeAsciiArray(writer, data, number_format);
+
 				break;
 			case ExternalFileBinary:
 				// TODO: Placeholder for future implementation
@@ -327,6 +391,26 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 				break;
 			}
 		
+		// Encoding string
+		String encoding = null;
+		switch(_options.encoding){
+			case Ascii:
+				encoding = "ASCII";
+				break;
+			case Base64Binary:
+				encoding = "Base64Binary";
+				break;
+			case GzipBase64Binary:
+				encoding = "GZipBase64Binary";
+				break;
+			case ExternalFileBinary:
+				encoding = "ExternalFileBinary";
+				InterfaceSession.log("GiftiSurfaceWriter: Type 'ExternalFileBinary' not implemented.",
+									 LoggingType.Errors);
+				return;
+			}
+		
+		
 		ArrayList<MguiNumber> data = this_column.getData();
 		
 		String dt = getGiftiDatatype(this_column.getDataTransferType());
@@ -335,11 +419,11 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 				"\n" + tab2 + "ArrayIndexingOrder='RowMajorOrder'" +
 				"\n" + tab2 + "Dimensionality='1'" + 
 				"\n" + tab2 + "Dim0='" + data.size() + "'" +
-				"\n" + tab2 + "Encoding='" + _options.encoding + "'" +
+				"\n" + tab2 + "Encoding='" + encoding + "'" +
 				"\n" + tab2 + "Endian='" + _options.byte_order + "'" +
 				"\n" + tab2 + "ExternalFileName=''" +
 				"\n" + tab2 + "ExternalFileOffset='' >");
-		writer.write("\n" + tab2 + "<MetaData/>");
+		writer.write("\n" + tab2 + "<MetaData Name='" + this_column.getName() + "'/>");
 		writer.write("\n" + tab2 + "<CoordinateSystemTransformMatrix/>");
 		writer.write("\n" + tab2 + "<Data>");
 		
@@ -493,6 +577,32 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		
 		for (int i = 0; i < data.size(); i++){
 			line = MguiDouble.getString(data.get(i).getValue(), decimals);
+			length += line.length();
+			if (length > 76){
+				line = line + "\n";
+				length = 0;
+			}else{
+				line = line + " ";
+				}
+			writer.write(line);
+			}
+		
+	}
+	
+	/*******************************************
+	 * Write vertex data as ASCII data to an XML writer; formats to {@code decimals} decimal places. Wraps
+	 * line when it exceeds 76 characters.
+	 * 
+	 * @param mesh
+	 * @param number_format
+	 */
+	protected void writeAsciiArray(BufferedWriter writer, ArrayList<MguiNumber> data, String number_format) throws IOException{
+		
+		String line;
+		int length = 0;
+		
+		for (int i = 0; i < data.size(); i++){
+			line = MguiDouble.getString(data.get(i).getValue(), number_format);
 			length += line.length();
 			if (length > 76){
 				line = line + "\n";

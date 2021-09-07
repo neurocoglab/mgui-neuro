@@ -23,27 +23,34 @@ package mgui.io.standard.gifti;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.ArrayList;
 
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
+
+import org.xml.sax.EntityResolver;
+import org.xml.sax.InputSource;
+import org.xml.sax.XMLReader;
+
+import Jama.Matrix;
 import mgui.geometry.Mesh3D;
 import mgui.geometry.mesh.MeshFunctionException;
 import mgui.geometry.mesh.MeshFunctions;
 import mgui.geometry.util.GeometryFunctions;
+import mgui.interfaces.InterfaceEnvironment;
 import mgui.interfaces.InterfaceSession;
 import mgui.interfaces.ProgressUpdater;
 import mgui.interfaces.io.InterfaceIOType;
 import mgui.interfaces.logs.LoggingType;
+import mgui.interfaces.maps.ColourMap;
 import mgui.interfaces.shapes.Mesh3DInt;
+import mgui.interfaces.shapes.VertexDataColumn;
 import mgui.io.InterfaceIOOptions;
 import mgui.io.domestic.shapes.SurfaceFileLoader;
-import mgui.io.domestic.shapes.SurfaceInputOptions;
+import mgui.io.standard.gifti.GiftiOutputOptions.NiftiIntent;
 import mgui.io.standard.gifti.xml.GiftiXMLHandler;
-
-import org.xml.sax.InputSource;
-import org.xml.sax.XMLReader;
-import org.xml.sax.helpers.XMLReaderFactory;
-
-import Jama.Matrix;
 
 /***********************************************************
  * Loads an XML-format GIFTI file. See <a href="http://www.nitrc.org/projects/gifti/">
@@ -76,13 +83,14 @@ public class GiftiSurfaceLoader extends SurfaceFileLoader {
 			merge_shapes = new ArrayList<Mesh3D>();
 		for (int i = 0; i < s_options.files.length; i++){
 			setFile(s_options.files[i]);
+			setObjectName(s_options.names[i]);
 			try{
 				Mesh3DInt mesh = loadSurface(progress_bar, s_options);
 				if (mesh == null) return false;
 				
 				if (!s_options.merge_shapes){
-					if (s_options.current_mesh == null)
-						mesh.setName(s_options.names[i]);
+//					if (s_options.current_mesh == null)
+//						mesh.setName(s_options.names[i]);
 					s_options.shapeSet.addShape(mesh);
 				}else{
 					merge_shapes.add(mesh.getMesh());
@@ -132,12 +140,19 @@ public class GiftiSurfaceLoader extends SurfaceFileLoader {
 			}
 		
 		try{
-			XMLReader reader = XMLReaderFactory.createXMLReader();
+			//XMLReader reader = XMLReaderFactory.createXMLReader();
+			SAXParserFactory spf = SAXParserFactory.newInstance();
+			SAXParser sp = spf.newSAXParser();
+			XMLReader reader = sp.getXMLReader();
+			reader.setEntityResolver(new DtdResolver());
+			//reader.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false);
+
 			GiftiXMLHandler handler = new GiftiXMLHandler(_options.current_mesh);
 			reader.setContentHandler(handler);
 			reader.setErrorHandler(handler);
 			reader.parse(new InputSource(new FileReader(dataFile)));
 			Mesh3DInt mesh_int = handler.getMesh();
+			mesh_int.setName(getObjectName());
 			ArrayList<Matrix> transforms = handler.getTransforms();
 			if (_options.apply_transforms && transforms.size() > 0){
 				Mesh3D mesh = mesh_int.getMesh();
@@ -146,15 +161,58 @@ public class GiftiSurfaceLoader extends SurfaceFileLoader {
 				mesh_int.setMesh(mesh);
 				}
 			
+			ColourMap cmap = handler.label_cmap;
+			if (cmap != null) {
+				
+				cmap.setName(getObjectName() + "_labels");
+				
+				// Add to environment
+				if (InterfaceEnvironment.getColourMap(cmap.getName()) == null) {
+					InterfaceEnvironment.addColourMap(cmap);
+					}
+
+				// Set for all label columns
+				for (VertexDataColumn column : mesh_int.getVertexDataColumns()) {
+					if (handler.nifti_intents.get(column.getName()) == NiftiIntent.NIFTI_INTENT_LABEL) {
+						mesh_int.setColourMap(column.getName(), cmap);
+						//column.setColourMap(cmap);
+						}
+					}
+				
+				
+				
+				}
+			
 			return mesh_int;
 			
 		}catch (Exception e){
-			InterfaceSession.log("GiftiSurfaceLoader: error loading file '" + dataFile.getAbsolutePath() + 
-								 "';\nDetails: " + e.getMessage(), 
-								 LoggingType.Errors);
+//			InterfaceSession.log("GiftiSurfaceLoader: error loading file '" + dataFile.getAbsolutePath() + 
+//								 "';\nDetails: " + e.getMessage(), 
+//								 LoggingType.Errors);
+			InterfaceSession.handleException(e);
 			return null;
 			}
 	
+	}
+	
+	class DtdResolver implements EntityResolver {
+		   public InputSource resolveEntity (String publicId, String systemId) {
+			   try {
+				   if (systemId.equals("http://www.nitrc.org/frs/download.php/115/gifti.dtd")) {
+			           	// return local DTD
+				       	URL url = getClass().getClassLoader().getResource("mgui/resources/init/gifti/gifti.dtd");
+				       	
+				       	return new InputSource(url.toURI().toASCIIString());
+				   } else {
+			           	// use the default behaviour
+				       	return null;
+						}
+			   } catch(URISyntaxException ex) {
+				    InterfaceSession.handleException(ex);
+			   		}
+			   
+			   return null;
+		   }
 	}
 	
 	@Override

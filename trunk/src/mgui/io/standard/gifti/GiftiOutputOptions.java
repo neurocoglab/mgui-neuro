@@ -54,12 +54,23 @@ public class GiftiOutputOptions extends SurfaceOutputOptions {
 		DataAndRGBA;
 	}
 	
+	public enum NiftiIntent{
+		NIFTI_INTENT_LABEL,
+		NIFTI_INTENT_VECTOR,
+		NIFTI_INTENT_SHAPE,
+		NIFTI_INTENT_NONE;
+		
+	}
+	
 	public GiftiEncoding encoding = GiftiEncoding.GzipBase64Binary;
 	public ByteOrder byte_order = ByteOrder.LittleEndian;
 	public int decimal_places = 5; 		// Number of decimal places, for ASCII-encoded data
 	
 	public ArrayList<String> write_columns = new ArrayList<String>();
+	public ArrayList<String> write_formats = new ArrayList<String>();
 	public ColumnFormat column_format = ColumnFormat.Data;
+	
+	public ArrayList<NiftiIntent> nifti_intents = new ArrayList<NiftiIntent>();
 	
 	/********************************
 	 * Sets the columns for which data will be written to the GIFTI file; an empty array, or {@code null},

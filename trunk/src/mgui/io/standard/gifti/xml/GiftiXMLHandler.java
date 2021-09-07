@@ -38,12 +38,15 @@ import Jama.Matrix;
 import mgui.geometry.Mesh3D;
 import mgui.interfaces.InterfaceSession;
 import mgui.interfaces.logs.LoggingType;
+import mgui.interfaces.maps.DiscreteColourMap;
 import mgui.interfaces.shapes.Mesh3DInt;
+import mgui.io.standard.gifti.GiftiOutputOptions.NiftiIntent;
 import mgui.io.util.IoFunctions;
 import mgui.numbers.MguiFloat;
 import mgui.numbers.MguiInteger;
 import mgui.numbers.MguiNumber;
 import mgui.numbers.MguiShort;
+import mgui.util.Colour4f;
 
 /**********************************************************
  * XML handler for GIFTI format surface files. See <a href="http://www.nitrc.org/projects/gifti/">
@@ -77,6 +80,11 @@ public class GiftiXMLHandler extends DefaultHandler {
 	// Keep track of XML tags
 	String tag_tracker;
 	
+	// Label table -> name/colour maps
+	public DiscreteColourMap label_cmap = null;
+	
+	public HashMap<String,NiftiIntent> nifti_intents = new HashMap<String,NiftiIntent>();
+	
 	// DataArray fields
 	String da_intent;
 	String da_type;
@@ -87,6 +95,7 @@ public class GiftiXMLHandler extends DefaultHandler {
 	String da_endian;
 	String da_file;
 	String da_file_offset;
+	String da_name;
 	
 	// Transform matrix
 	ArrayList<Matrix> transforms = new ArrayList<Matrix>();
@@ -146,6 +155,8 @@ public class GiftiXMLHandler extends DefaultHandler {
 	@Override
 	public void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException {
 		
+		if (localName.length() == 0) localName = qName;
+		
 		if (localName.equals("GIFTI")){
 			if (tag_tracker != null){
 				throw new SAXException ("GiftiXMLHandler: GIFTI tag encountered, but surface already started..");
@@ -166,18 +177,48 @@ public class GiftiXMLHandler extends DefaultHandler {
 			return;
 			}
 		
+		if (localName.equals("LabelTable")){
+				
+			label_cmap = new DiscreteColourMap();
+			
+			tag_tracker = tag_tracker + "." + localName;
+			return;
+			}
+		
+		if (localName.equals("Label")){
+			if (!tag_tracker.endsWith("LabelTable")) {
+				InterfaceSession.log("GiftiXMLHandler: Label tag must be a child of LabelTable.");
+				return;
+				}
+			
+			int idx = Integer.valueOf(attributes.getValue("Key"));
+			Colour4f clr = new Colour4f();
+			clr.setRed(Float.valueOf(attributes.getValue("Red")));
+			clr.setGreen(Float.valueOf(attributes.getValue("Green")));
+			clr.setBlue(Float.valueOf(attributes.getValue("Blue")));
+			if (attributes.getValue("Alpha") != null) {
+				clr.setAlpha(Float.valueOf(attributes.getValue("Alpha")));
+				}
+			label_cmap.setColour(idx, clr);
+			return;
+			}
+		
+		
 		if (localName.equals("MetaData")){
 			
 			if (tag_tracker.equals("GIFTI")){
 				// Set surface metadata here
+				da_name = attributes.getValue("Name");
 				
 				tag_tracker = tag_tracker + "." + localName;
 				return;
 				}
 			
 			if (tag_tracker.equals("GIFTI.DataArray")){
-				// Set data array metadata here
-				
+				// Set surface metadata here
+				da_name = attributes.getValue("Name");
+				metadata.put("Name", da_name);
+
 				tag_tracker = tag_tracker + "." + localName;
 				return;
 				}
@@ -261,12 +302,25 @@ public class GiftiXMLHandler extends DefaultHandler {
 	@Override
 	public void endElement(String uri, String localName, String qName) throws SAXException {
 		
+		if (localName.length() == 0) localName = qName;
+		
 		if (localName.equals("GIFTI")){
 			// We're done here
 			if (mesh_int == null)
 				throw new SAXException ("GiftiXMLHandler: File finished but no surface was created..");
 			
+			if (label_cmap != null) {
+				label_cmap.setName(mesh_int.getName() + "_labels");
+				}
+			
 			tag_tracker = null;
+			return;
+			}
+		
+		if (localName.equals("LabelTable")){
+			
+		
+			tag_tracker = tag_tracker.substring(0, tag_tracker.lastIndexOf("."));
 			return;
 			}
 		
@@ -362,7 +416,9 @@ public class GiftiXMLHandler extends DefaultHandler {
 							case "NIFTI_INTENT_LABEL":
 							case "NIFTI_INTENT_SHAPE":
 							case "NIFTI_INTENT_NONE":
+							case "NIFTI_INTENT_VECTOR":
 								addVertexData(name, b_data);
+								nifti_intents.put(name, NiftiIntent.valueOf(da_intent));
 								break;
 								
 							case "NIFTI_INTENT_TIMESERIES":
@@ -391,6 +447,7 @@ public class GiftiXMLHandler extends DefaultHandler {
 							case "NIFTI_INTENT_LABEL":
 							case "NIFTI_INTENT_SHAPE":
 							case "NIFTI_INTENT_NONE":
+							case "NIFTI_INTENT_VECTOR":
 								addVertexData(name, data_buffer.toString());
 								break;
 								

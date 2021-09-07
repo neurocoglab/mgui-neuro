@@ -21,19 +21,28 @@
 package mgui.io.standard.gifti;
 
 import java.awt.event.ActionEvent;
+import java.awt.image.DataBuffer;
+import java.util.ArrayList;
+import java.util.Vector;
 
+import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.table.AbstractTableModel;
 
 import mgui.interfaces.InterfaceOptions;
 import mgui.interfaces.layouts.LineLayoutConstraints;
+import mgui.interfaces.shapes.Mesh3DInt;
 import mgui.io.InterfaceIOOptions;
 import mgui.io.InterfaceIOPanel;
 import mgui.io.domestic.shapes.SurfaceOutputDialogBox;
 import mgui.io.standard.gifti.GiftiOutputOptions.ByteOrder;
 import mgui.io.standard.gifti.GiftiOutputOptions.GiftiEncoding;
+import mgui.io.standard.gifti.GiftiOutputOptions.NiftiIntent;
 
 /***************************************************************
  * Opotions dialog box for a Gifti surface write operation.
@@ -54,6 +63,11 @@ public class GiftiSurfaceOutDialogBox extends SurfaceOutputDialogBox {
 	JLabel lblWriteColumns = new JLabel("Write columns as:");
 	JComboBox cmbWriteColumns = new JComboBox();
 	
+	protected JTable table;
+	protected JScrollPane scrColumns;
+	
+	Mesh3DInt current_mesh;
+	
 	public GiftiSurfaceOutDialogBox(){
 		super();
 	}
@@ -64,6 +78,8 @@ public class GiftiSurfaceOutDialogBox extends SurfaceOutputDialogBox {
 	}
 	
 	protected void init(){
+		
+		this.setDialogSize(450,440);
 		
 		setTitle("Output Gifti Surface File Options");
 		
@@ -89,7 +105,6 @@ public class GiftiSurfaceOutDialogBox extends SurfaceOutputDialogBox {
 		
 		// Table
 		
-		
 		fillCombos();
 		updateDialog();
 		
@@ -105,12 +120,21 @@ public class GiftiSurfaceOutDialogBox extends SurfaceOutputDialogBox {
 		cmbByteOrder.addItem("BigEndian");
 		cmbByteOrder.addItem("LittleEndian");
 		
+		
+		
 		cmbWriteColumns.removeAllItems();
 		cmbWriteColumns.addItem("Values");
 		cmbWriteColumns.addItem("RGB");
 		cmbWriteColumns.addItem("RGBA");
 		cmbWriteColumns.addItem("Values + RGB");
 		cmbWriteColumns.addItem("Values + RGBA");
+		
+	}
+	
+	protected void fillMeshCombo(){
+		super.fillMeshCombo();
+		
+		current_mesh = (Mesh3DInt)cmbMesh.getSelectedItem();
 		
 	}
 	
@@ -156,6 +180,7 @@ public class GiftiSurfaceOutDialogBox extends SurfaceOutputDialogBox {
 		
 		txtDecimals.setText("" + _options.decimal_places);
 		updateControls();
+		updateTable();
 		
 		return true;
 	}
@@ -165,6 +190,69 @@ public class GiftiSurfaceOutDialogBox extends SurfaceOutputDialogBox {
 		txtDecimals.setEnabled(is_ascii);
 	}
 	
+	protected void updateTable(){
+		if (current_mesh == null) return;
+		
+		//header and new table model
+		if (scrColumns != null) mainPanel.remove(scrColumns);
+		
+		//table for all data into mesh
+		ArrayList<String> cols = current_mesh.getVertexDataColumnNames();
+		if (cols == null) return;
+		
+		Vector<String> v_cols = new Vector<String>(cols);
+		Vector<Boolean> v_out = new Vector<Boolean>();
+		Vector<String> v_formats = new Vector<String>();
+		Vector<Boolean> v_labels = new Vector<Boolean>();
+		
+		GiftiOutputOptions _options = (GiftiOutputOptions)options;
+		
+		for (int i = 0; i < v_cols.size(); i++){
+			String column = v_cols.get(i);
+			if (_options.write_columns != null && _options.write_columns.contains(column)){
+				v_out.add(true);
+				int idx = _options.write_columns.indexOf(column);
+				v_labels.add(idx, _options.nifti_intents.get(idx) == NiftiIntent.NIFTI_INTENT_LABEL);
+				v_formats.add(idx, _options.write_formats.get(idx));
+			}else{
+				v_out.add(false);
+				int dtype = current_mesh.getVertexDataColumn(v_cols.get(i)).getDataTransferType();
+				if (dtype == DataBuffer.TYPE_INT || dtype == DataBuffer.TYPE_SHORT) {
+					v_formats.add("0");
+				} else {
+					v_formats.add("0.000#####");
+					}
+				v_labels.add(false);
+				}
+			}
+		
+		Vector<Vector<Object>> values = new Vector<Vector<Object>>(cols.size());
+		for (int i = 0; i < cols.size(); i++){
+			Vector<Object> v = new Vector<Object>(4);
+			v.add(v_out.get(i));
+			v.add(v_cols.get(i));
+			v.add(v_formats.get(i));
+			v.add(v_labels.get(i));
+			values.add(v);
+			}
+		
+		Vector<String> header = new Vector<String>(4);
+		header.add("Write");
+		header.add("Column");
+		header.add("Number");
+		header.add("Labels");
+		
+		TableModel model = new TableModel(values, header);
+		table = new JTable(model);
+		scrColumns = new JScrollPane(table);
+		table.getColumnModel().getColumn(0).setPreferredWidth(15);
+		
+		LineLayoutConstraints c = new LineLayoutConstraints(7, 12, 0.05, 0.9, 1);
+		mainPanel.add(scrColumns, c);
+		mainPanel.updateUI();
+		
+	}
+	
 	@Override
 	public void actionPerformed(ActionEvent e) {
 		
@@ -172,6 +260,7 @@ public class GiftiSurfaceOutDialogBox extends SurfaceOutputDialogBox {
 			if (options == null) return;
 	
 			GiftiOutputOptions _options = (GiftiOutputOptions)options;
+			TableModel model = (TableModel)table.getModel();
 			_options.mesh = getMesh();
 		
 			if (cmbEncoding.getSelectedItem().equals("Ascii"))
@@ -187,6 +276,17 @@ public class GiftiSurfaceOutDialogBox extends SurfaceOutputDialogBox {
 				_options.byte_order = ByteOrder.LittleEndian;
 			
 			_options.decimal_places = Integer.valueOf(txtDecimals.getText());
+			
+			// Data columns
+			_options.write_columns = new ArrayList<String>();
+			_options.write_formats = new ArrayList<String>();
+			_options.nifti_intents = new ArrayList<NiftiIntent>();
+			for (int i = 0; i < model.getRowCount(); i++)
+				if (model.getValueAt(i, 0).equals(true)){
+					_options.write_columns.add((String)model.getValueAt(i, 1));
+					_options.write_formats.add((String)model.getValueAt(i, 2));
+					_options.nifti_intents.add((Boolean)model.getValueAt(i, 3) ? NiftiIntent.NIFTI_INTENT_LABEL : NiftiIntent.NIFTI_INTENT_VECTOR);
+					}
 		
 			setVisible(false);
 			return;
@@ -200,5 +300,55 @@ public class GiftiSurfaceOutDialogBox extends SurfaceOutputDialogBox {
 		super.actionPerformed(e);
 		
 	}
+	
+	
+	protected class TableModel extends AbstractTableModel {
+	      
+		Vector<Vector<Object>> data;
+		Vector<String> columns;
+		
+		public TableModel(Vector<Vector<Object>> data, Vector<String> columns){
+			this.data = data;
+			this.columns = columns;
+		}
+
+        public int getColumnCount() {
+            return columns.size();
+        }
+
+        public int getRowCount() {
+            return data.size();
+        }
+
+        @Override
+		public String getColumnName(int col) {
+            return columns.get(col);
+        }
+
+        public Object getValueAt(int row, int col) {
+            return data.get(row).get(col);
+        }
+
+        @Override
+		public Class getColumnClass(int c) {
+            return getValueAt(0, c).getClass();
+        }
+
+        /*
+         * Column names not editable
+         */
+        @Override
+		public boolean isCellEditable(int row, int col) {
+        	if (col == 1) return false;
+        	return true;
+        }
+
+        @Override
+		public void setValueAt(Object value, int row, int col) {
+            data.get(row).set(col, value);
+            fireTableCellUpdated(row, col);
+        }
+
+    }
 	
 }
