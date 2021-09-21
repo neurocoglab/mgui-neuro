@@ -21,6 +21,9 @@
 package mgui.io.standard.gifti;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+
+import org.jogamp.vecmath.Matrix4f;
 
 import mgui.io.domestic.shapes.SurfaceOutputOptions;
 
@@ -34,19 +37,19 @@ import mgui.io.domestic.shapes.SurfaceOutputOptions;
  */
 public class GiftiOutputOptions extends SurfaceOutputOptions {
 
-	public enum GiftiEncoding{
+	public enum GiftiEncoding {
 		Ascii,
 		Base64Binary,
-		GzipBase64Binary,
+		GZipBase64Binary,
 		ExternalFileBinary;
 	}
 	
-	public enum ByteOrder{
+	public enum ByteOrder {
 		LittleEndian,
 		BigEndian;
 	}
 	
-	public enum ColumnFormat{
+	public enum ColumnFormat {
 		Data,
 		RGB,
 		RGBA,
@@ -54,23 +57,91 @@ public class GiftiOutputOptions extends SurfaceOutputOptions {
 		DataAndRGBA;
 	}
 	
-	public enum NiftiIntent{
+	public enum NiftiIntent {
 		NIFTI_INTENT_LABEL,
 		NIFTI_INTENT_VECTOR,
 		NIFTI_INTENT_SHAPE,
+		NIFTI_INTENT_POINTSET,
+		NIFTI_INTENT_NODE_INDEX,
+		NIFTI_INTENT_TIME_SERIES,
+		NIFTI_INTENT_TRIANGLE,
 		NIFTI_INTENT_NONE;
+	}
+	
+	public enum DataSpace {
+		NIFTI_XFORM_UNKNOWN,
+		NIFTI_XFORM_SCANNER_ANAT,
+		NIFTI_XFORM_ALIGNED_ANAT,
+		NIFTI_XFORM_TALAIRACH,
+		NIFTI_XFORM_MNI_152;
+	}
+	
+	public enum AnatomicalStructurePrimary {
+		CortexLeft,
+		CortexRight,
+		CirtexRightAndLeft,
+		Cerebellum,
+		Head,
+		HippocampusLeft,
+		HippocampusRight,
+		Other
+	}
+	
+	public enum AnatomicalStructureSecondary {
+		GrayWhite,
+		Pial,
+		MidThickness;
 		
 	}
 	
-	public GiftiEncoding encoding = GiftiEncoding.GzipBase64Binary;
+	public enum GeometricType {
+		Reconstruction,
+		Anatomical,
+		Inflated,
+		VeryInflated,
+		Spherical,
+		SemiSpherical,
+		Ellipsoid,
+		Flat,
+		Hull;
+	}
+	
+	public enum TopologicalType {
+		Open,
+		Closed,
+		Cut;
+	}
+	
+	public enum ColumnType {
+		Labels,
+		Values;
+	}
+	
+	public enum OutputType {
+		AllInOne,
+		SeparateFiles;
+	}
+	
+	public GiftiEncoding encoding = GiftiEncoding.GZipBase64Binary;
 	public ByteOrder byte_order = ByteOrder.LittleEndian;
 	public int decimal_places = 5; 		// Number of decimal places, for ASCII-encoded data
+	
+	public DataSpace data_space = DataSpace.NIFTI_XFORM_UNKNOWN;
+	public Matrix4f transform = new Matrix4f(1, 0, 0, 0, 
+											 0, 1, 0, 0,
+											 0, 0, 1, 0,
+											 0, 0, 0, 1);
 	
 	public ArrayList<String> write_columns = new ArrayList<String>();
 	public ArrayList<String> write_formats = new ArrayList<String>();
 	public ColumnFormat column_format = ColumnFormat.Data;
 	
-	public ArrayList<NiftiIntent> nifti_intents = new ArrayList<NiftiIntent>();
+	public ArrayList<ColumnType> column_types = new ArrayList<ColumnType>();
+	//public ArrayList<NiftiIntent> nifti_intents = new ArrayList<NiftiIntent>();
+	
+	public OutputType output_type = OutputType.AllInOne;
+	
+	public HashMap<String,Object> metadata = null;
 	
 	/********************************
 	 * Sets the columns for which data will be written to the GIFTI file; an empty array, or {@code null},
@@ -84,6 +155,7 @@ public class GiftiOutputOptions extends SurfaceOutputOptions {
 		if (columns == null) columns = new ArrayList<String>();
 		this.write_columns = new ArrayList<String>(columns);
 	}
+	
 	
 	
 	

@@ -28,6 +28,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Vector;
 
 import org.jogamp.vecmath.Color4f;
 import org.jogamp.vecmath.Point3f;
@@ -46,6 +47,7 @@ import mgui.interfaces.shapes.VertexDataColumn;
 import mgui.interfaces.xml.XMLFunctions;
 import mgui.io.InterfaceIOOptions;
 import mgui.io.domestic.shapes.SurfaceFileWriter;
+import mgui.io.standard.gifti.GiftiOutputOptions.ColumnType;
 import mgui.io.standard.gifti.GiftiOutputOptions.NiftiIntent;
 import mgui.io.util.IoFunctions;
 import mgui.numbers.MguiDouble;
@@ -65,8 +67,12 @@ import mgui.util.Colour;
  */
 public class GiftiSurfaceWriter extends SurfaceFileWriter {
 
-	String GIFTI_HEADER = "<!DOCTYPE GIFTI SYSTEM 'http://www.nitrc.org/frs/download.php/115/gifti.dtd'>" +
-						  "\n<GIFTI Version='1.0'  NumberOfDataArrays='2'>";
+//	String GIFTI_HEADER = "<!DOCTYPE GIFTI SYSTEM 'http://www.nitrc.org/frs/download.php/115/gifti.dtd'>" +
+//						  "\n<GIFTI Version='1.0'  NumberOfDataArrays='2'>";
+//	
+	String tab1 = "\t";
+	String tab2 = "\t\t";
+	String tab3 = "\t\t\t";
 	
 	public GiftiSurfaceWriter(){
 		
@@ -79,64 +85,179 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 	@Override
 	public boolean writeSurface(Mesh3DInt mesh_int, InterfaceIOOptions options, ProgressUpdater progress_bar) {
 		
-		// Write the XML
+		GiftiOutputOptions _options = (GiftiOutputOptions)options;
+		switch (_options.output_type) { 
+			case SeparateFiles:
+				// Write surface + columns as separate files
+				return writeSurfaceSeparate(mesh_int, options, progress_bar);
+			case AllInOne:
+			default:
+				return writeSurfaceAll(mesh_int, options, progress_bar);
+			}
+		
+		
+	}
+	
+	protected String getGiftiHeader(int num_arrays) {
+		
+		return "<!DOCTYPE GIFTI SYSTEM 'http://www.nitrc.org/frs/download.php/115/gifti.dtd'>" +
+				        "\n<GIFTI Version='1.0'  NumberOfDataArrays='" + num_arrays + "'>";
+		
+	}
+	
+	/****************************
+	 * Writes mesh to separate output files:
+	 * 
+	 * <ol>
+	 * <li>pointset/triangle data sets to a "surf.gii" file
+	 * <li>vertex-wise labels to separate "label.gii" files
+	 * <li> vertex-wise values to separate "shape.gii" files
+	 * </ol>
+	 * 
+	 * @param mesh_int
+	 * @param options
+	 * @param progress_bar
+	 * @return
+	 */
+	protected boolean writeSurfaceSeparate(Mesh3DInt mesh_int, InterfaceIOOptions options, ProgressUpdater progress_bar) {
+		
 		try{
-			String tab1 = "\t";
-			String tab2 = "\t\t";
-			String tab3 = "\t\t\t";
-			
-			Mesh3D mesh = mesh_int.getMesh();
 			
 			GiftiOutputOptions _options = (GiftiOutputOptions)options;
 			
 			// Encoding string
-			String encoding = null;
 			switch(_options.encoding){
-				case Ascii:
-					encoding = "ASCII";
-					break;
-				case Base64Binary:
-					encoding = "Base64Binary";
-					break;
-				case GzipBase64Binary:
-					encoding = "GZipBase64Binary";
-					break;
 				case ExternalFileBinary:
-					encoding = "ExternalFileBinary";
 					InterfaceSession.log("GiftiSurfaceWriter: Type 'ExternalFileBinary' not implemented.",
 										 LoggingType.Errors);
 					return false;
+				default:
 				}
 			
-			// Byte order
-			String byte_order = null;
-			ByteOrder b_order = ByteOrder.BIG_ENDIAN;
+			// Write mesh to surf.nii file
+			String filename = dataFile.getName();
+			if (filename.endsWith(".gii")) {
+				filename = filename.substring(0, filename.length()-4) + ".surf.gii";
+			} else if (!filename.endsWith(".surf.gii")) {
+				filename = filename + ".surf.gii";
+				}
+			File output_file = new File(dataFile.getParentFile().getAbsolutePath() + File.separator + filename);
+			
+			BufferedWriter writer = new BufferedWriter(new java.io.FileWriter(output_file));
+			
+			// Header
+			writer.write(XMLFunctions.getXMLHeader());
+			writer.write("\n" + getGiftiHeader(2));
+			writer.write("\n" + tab1 + "<MetaData/>");
+			
+			// Write coordinates + faces
+			writeMesh(writer, mesh_int, _options);
+			
+			writer.write("\n" + "</GIFTI>");
+			writer.close();
+			
+			// Write vertex-wise labels/values to label.gii/shape.gii file(s)
+			for (int i = 0; i < _options.write_columns.size(); i++) {
+					
+				String ext = _options.column_types.get(i) == ColumnType.Labels ? ".label.gii" : ".shape.gii";
+				String number_format = _options.column_types.get(i) == ColumnType.Labels ? "0" : _options.number_format;
 				
-			switch (_options.byte_order){
-				case LittleEndian:
-					byte_order = "LittleEndian";
-					b_order = ByteOrder.LITTLE_ENDIAN;
-					break;
-				case BigEndian:
-					byte_order = "BigEndian";
-					b_order = ByteOrder.BIG_ENDIAN;
-					break;
+				String column = _options.write_columns.get(i);
+				VertexDataColumn vcolumn = mesh_int.getVertexDataColumn(column);
+				
+				filename = dataFile.getName();
+	
+				if (filename.endsWith(ext)) {
+					// All good
+				} else if (filename.endsWith(".gii")) {
+					filename = filename.substring(0, filename.length()-4) + ext;
+				} else {
+					filename = filename + ext;
+					}
+				output_file = new File(dataFile.getParentFile().getAbsolutePath() + File.separator + filename);
+				
+				writer = new BufferedWriter(new java.io.FileWriter(output_file));
+					
+				// Header
+				writer.write(XMLFunctions.getXMLHeader());
+				writer.write("\n" + getGiftiHeader(1));
+				
+				writer.write("\n" + tab1 + "<MetaData>");
+				writeMetadataItem(writer, "Name", column, 2);
+				
+				if (_options.metadata != null) {
+					
+					for (int j = 0; j < metadata_mesh.length; j++) {
+						writeMetadataItem(writer, metadata_mesh[j], _options.metadata.get(metadata_mesh[j]).toString(), 2);
+						}
+					
+					}
+				
+				writer.write("\n" + tab1 + "</MetaData>");
+					
+				// Write label table, if necessary
+				if (_options.column_types.get(i) == ColumnType.Labels && 
+						vcolumn.getColourMap() instanceof DiscreteColourMap) {
+					writeLabelTable(writer, vcolumn, _options);
+					}
+					
+				// Write vertex values
+				writeVertexData(writer, vcolumn, _options, number_format, NiftiIntent.NIFTI_INTENT_LABEL);
+
+				writer.write("\n" + "</GIFTI>");
+				writer.close();
+				
+				}
+
+			return true;
+			
+		} catch (IOException ex) {
+			InterfaceSession.log("GiftiSurfaceWriter: I/O error while writing to '" + 
+					dataFile.getAbsolutePath() + "'.\nDetails: " + ex.getMessage(), 
+					LoggingType.Errors);
+			}
+		
+		
+		return false;
+	}
+	
+	
+	/****************************
+	 * Write all data sets, including vertex-wise data, to one GIFTI file. This will not be compatible
+	 * with some viewers.
+	 * 
+	 * @param mesh_int
+	 * @param options
+	 * @param progress_bar
+	 * @return
+	 */
+	protected boolean writeSurfaceAll(Mesh3DInt mesh_int, InterfaceIOOptions options, ProgressUpdater progress_bar) {
+		
+		// Write the XML
+		try{
+			
+			GiftiOutputOptions _options = (GiftiOutputOptions)options;
+			
+			// Encoding string
+			switch(_options.encoding){
+				case ExternalFileBinary:
+					InterfaceSession.log("GiftiSurfaceWriter: Type 'ExternalFileBinary' not implemented.",
+										 LoggingType.Errors);
+					return false;
+				default:
 				}
 			
 			// LabelTable?
-			NameMap label_nmap = null;
-			DiscreteColourMap label_cmap = null;
+			VertexDataColumn label_column = null;
 			if (_options.write_columns.size() > 0){
-				for (int i = 0; i < _options.nifti_intents.size(); i++){
-					if (_options.nifti_intents.get(i) == NiftiIntent.NIFTI_INTENT_LABEL) {
+				for (int i = 0; i < _options.column_types.size(); i++){
+					if (_options.column_types.get(i) == ColumnType.Labels) {
 						
 						VertexDataColumn vcolumn = mesh_int.getVertexDataColumn(_options.write_columns.get(i));
 
 						ColourMap cmap = vcolumn.getColourMap();
 						if (cmap instanceof DiscreteColourMap) {
-							label_cmap = (DiscreteColourMap)cmap;
-							// First column with labels defines the table; for some reason,
-							// GIFTI only allows one table
+							label_column = vcolumn;
 							continue;
 							}
 						
@@ -149,100 +270,25 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 			
 			// Header
 			writer.write(XMLFunctions.getXMLHeader());
-			writer.write("\n" + GIFTI_HEADER);
+			writer.write("\n" + getGiftiHeader(2 + _options.write_columns.size()));
 			writer.write("\n" + tab1 + "<MetaData/>");
-			if (label_cmap == null) {
-				writer.write("\n" + tab1 + "<LabelTable/>");
-			} else {
-				writer.write("\n" + tab1 + "<LabelTable>");
-				for (int idx : label_cmap.getIndices()) {
-					writer.write("\n" + tab2 + "<Label Key='" + idx + "'");
-					Colour clr = label_cmap.getColour(idx);
-					writer.write("\n" + tab3 + "Red='" + clr.getRed() + "'" +
-								 "\n" + tab3 + "Green='" + clr.getGreen() + "'" +
-								 "\n" + tab3 + "Blue='" + clr.getBlue() + "'" +
-								 "\n" + tab3 + "Alpha='" + clr.getAlpha() + "' />");
-					}
-				
-				writer.write("\n" + tab1 + "</LabelTable>");
+			
+			if (label_column != null) {
+				this.writeLabelTable(writer, label_column, _options);
 				}
 			
-			// Coordinates
-			writer.write("\n" + tab1 + "<DataArray Intent='NIFTI_INTENT_POINTSET'" +
-						"\n" + tab2 + "DataType='NIFTI_TYPE_FLOAT32'" +
-						"\n" + tab2 + "ArrayIndexingOrder='RowMajorOrder'" +
-						"\n" + tab2 + "Dimensionality='2'" + 
-						"\n" + tab2 + "Dim0='" + mesh.getSize() + "'" +
-						"\n" + tab2 + "Dim1='3'" + 
-						"\n" + tab2 + "Encoding='" + encoding + "'" +
-						"\n" + tab2 + "Endian='" + byte_order + "'" +
-						"\n" + tab2 + "ExternalFileName=''" +
-						"\n" + tab2 + "ExternalFileOffset='' >");
-			writer.write("\n" + tab2 + "<MetaData/>");
-			writer.write("\n" + tab2 + "<CoordinateSystemTransformMatrix/>");
-			
-			writer.write("\n" + tab2 + "<Data>");
-			
-			// Write data in specified format
-			switch (_options.encoding){
-				case GzipBase64Binary:
-					writeBinaryCoords(writer, mesh, true, b_order);
-					break;
-				case Base64Binary:
-					writeBinaryCoords(writer, mesh, false, b_order);
-					break;
-				case Ascii:
-					writeAsciiCoords(writer, mesh, _options.decimal_places);
-					break;
-				case ExternalFileBinary:
-					// TODO: Placeholder for future implementation
-					break;
-				}
-			
-			writer.write("</Data>");
-			writer.write("\n" + tab1 + "</DataArray>");
-			
-			// Faces
-			writer.write("\n" + tab1 + "<DataArray Intent='NIFTI_INTENT_TRIANGLE'" +
-					"\n" + tab2 + "DataType='NIFTI_TYPE_INT32'" +
-					"\n" + tab2 + "ArrayIndexingOrder='RowMajorOrder'" +
-					"\n" + tab2 + "Dimensionality='2'" + 
-					"\n" + tab2 + "Dim0='" + mesh.getFaceCount() + "'" +
-					"\n" + tab2 + "Dim1='3'" + 
-					"\n" + tab2 + "Encoding='" + encoding + "'" +
-					"\n" + tab2 + "Endian='" + byte_order + "'" +
-					"\n" + tab2 + "ExternalFileName=''" +
-					"\n" + tab2 + "ExternalFileOffset='' >");
-			writer.write("\n" + tab2 + "<MetaData/>");
-			writer.write("\n" + tab2 + "<CoordinateSystemTransformMatrix/>");
-			
-			writer.write("\n" + tab2 + "<Data>");
-			
-			// Write data in specified format
-			switch (_options.encoding){
-				case GzipBase64Binary:
-					writeBinaryFaces(writer, mesh, true, b_order);
-					break;
-				case Base64Binary:
-					writeBinaryFaces(writer, mesh, false, b_order);
-					break;
-				case Ascii:
-					writeAsciiFaces(writer, mesh);
-					break;
-				case ExternalFileBinary:
-					// TODO: Placeholder for future implementation
-					break;
-				}
-			
-			writer.write("</Data>");
-			writer.write("\n" + tab1 + "</DataArray>");
+			// Write coordinates + faces
+			writeMesh(writer, mesh_int, _options);
+
 			
 			// Write vertex data, if specified
 			if (_options.write_columns.size() > 0){
 				for (int i = 0; i < _options.write_columns.size(); i++){
 					VertexDataColumn this_column = mesh_int.getVertexDataColumn(_options.write_columns.get(i));
 					String number_format = _options.write_formats.get(i);
-					NiftiIntent nifti_intent = _options.nifti_intents.get(i);
+					NiftiIntent nifti_intent = _options.column_types.get(i) == ColumnType.Values ? 
+																					NiftiIntent.NIFTI_INTENT_SHAPE :
+																					NiftiIntent.NIFTI_INTENT_LABEL;
 					
 					boolean write_data = false;
 					boolean write_rgb = false;
@@ -299,6 +345,118 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		return false;
 	}
 	
+	
+	String[] metadata_mesh = new String[] {"AnatomicalStructurePrimary",
+										   "AnatomicalStructureSecondary",
+										   "GeometricType",
+										   "TopologicalType"};
+	
+	protected void writeMesh(BufferedWriter writer, Mesh3DInt mesh_int, GiftiOutputOptions _options) throws IOException {
+		
+		Mesh3D mesh = mesh_int.getMesh();
+		
+		// Byte order
+		ByteOrder b_order = _options.byte_order == GiftiOutputOptions.ByteOrder.LittleEndian ?
+													ByteOrder.LITTLE_ENDIAN : 
+													ByteOrder.BIG_ENDIAN;
+
+		writer.write("\n" + tab1 + "<DataArray Intent='NIFTI_INTENT_POINTSET'" +
+				"\n" + tab2 + "DataType='NIFTI_TYPE_FLOAT32'" +
+				"\n" + tab2 + "ArrayIndexingOrder='RowMajorOrder'" +
+				"\n" + tab2 + "Dimensionality='2'" + 
+				"\n" + tab2 + "Dim0='" + mesh.getSize() + "'" +
+				"\n" + tab2 + "Dim1='3'" + 
+				"\n" + tab2 + "Encoding='" + _options.encoding + "'" +
+				"\n" + tab2 + "Endian='" + _options.byte_order + "'" +
+				"\n" + tab2 + "ExternalFileName=''" +
+				"\n" + tab2 + "ExternalFileOffset='' >");
+
+		
+		writer.write("\n" + tab2 + "<MetaData>");
+		writeMetadataItem(writer, "Name", mesh_int.getName(), 3);
+		
+		if (_options.metadata != null) {
+			
+			for (int i = 0; i < metadata_mesh.length; i++) {
+				writeMetadataItem(writer, metadata_mesh[i], _options.metadata.get(metadata_mesh[i]).toString(), 3);
+				}
+			
+			}
+		
+		writer.write("\n" + tab2 + "</MetaData>");
+		
+		writer.write("\n" + tab2 + "<CoordinateSystemTransformMatrix>");
+		writer.write("\n" + tab3 + "<DataSpace>" + _options.data_space + "</DataSpace>");
+		writer.write("\n" + tab3 + "<TransformedSpace>" + _options.data_space + "</TransformedSpace>");
+		writer.write("\n" + tab3 + "<MatrixData>");
+		for (int i = 0; i < 4; i++) {
+			writer.write("\n" + tab3);
+			for (int j = 0; j < 4; j++) {
+				writer.write(_options.transform.getElement(i, j) + " ");
+				}
+			}
+		writer.write("\n" + tab3 + "</MatrixData>");
+		writer.write("\n" + tab2 + "</CoordinateSystemTransformMatrix>");
+		
+		
+		writer.write("\n" + tab2 + "<Data>");
+		
+		// Write data in specified format
+		switch (_options.encoding){
+			case GZipBase64Binary:
+				writeBinaryCoords(writer, mesh, true, b_order);
+				break;
+			case Base64Binary:
+				writeBinaryCoords(writer, mesh, false, b_order);
+				break;
+			case Ascii:
+				writeAsciiCoords(writer, mesh, _options.decimal_places);
+				break;
+			case ExternalFileBinary:
+				// TODO: Placeholder for future implementation
+				break;
+			}
+		
+		writer.write("</Data>");
+		writer.write("\n" + tab1 + "</DataArray>");
+		
+		// Faces
+		writer.write("\n" + tab1 + "<DataArray Intent='NIFTI_INTENT_TRIANGLE'" +
+				"\n" + tab2 + "DataType='NIFTI_TYPE_INT32'" +
+				"\n" + tab2 + "ArrayIndexingOrder='RowMajorOrder'" +
+				"\n" + tab2 + "Dimensionality='2'" + 
+				"\n" + tab2 + "Dim0='" + mesh.getFaceCount() + "'" +
+				"\n" + tab2 + "Dim1='3'" + 
+				"\n" + tab2 + "Encoding='" + _options.encoding + "'" +
+				"\n" + tab2 + "Endian='" + _options.byte_order + "'" +
+				"\n" + tab2 + "ExternalFileName=''" +
+				"\n" + tab2 + "ExternalFileOffset='' >");
+		
+		writer.write("\n" + tab2 + "<MetaData />");
+		
+		writer.write("\n" + tab2 + "<Data>");
+		
+		// Write data in specified format
+		switch (_options.encoding){
+			case GZipBase64Binary:
+				writeBinaryFaces(writer, mesh, true, b_order);
+				break;
+			case Base64Binary:
+				writeBinaryFaces(writer, mesh, false, b_order);
+				break;
+			case Ascii:
+				writeAsciiFaces(writer, mesh);
+				break;
+			case ExternalFileBinary:
+				// TODO: Placeholder for future implementation
+				break;
+			}
+		
+		writer.write("</Data>");
+		writer.write("\n" + tab1 + "</DataArray>");
+		
+	}
+	
 	protected void writeVertexData(BufferedWriter writer, VertexDataColumn this_column, GiftiOutputOptions _options,
 								   String number_format, NiftiIntent nifti_intent) throws IOException{
 		
@@ -325,7 +483,7 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 			case Base64Binary:
 				encoding = "Base64Binary";
 				break;
-			case GzipBase64Binary:
+			case GZipBase64Binary:
 				encoding = "GZipBase64Binary";
 				break;
 			case ExternalFileBinary:
@@ -335,9 +493,14 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 				return;
 			}
 		
-		ArrayList<MguiNumber> data = this_column.getData();
-		
 		String dt = getGiftiDatatype(this_column.getDataTransferType());
+		
+		ArrayList<MguiNumber> data = this_column.getData();
+		if (nifti_intent == NiftiIntent.NIFTI_INTENT_LABEL) {
+			data = getDataAsInteger(data);
+			dt = getGiftiDatatype(DataBuffer.TYPE_INT);
+			}
+		
 		writer.write("\n" + tab1 + "<DataArray Intent='" + nifti_intent + "'" +
 				"\n" + tab2 + "DataType='" + dt + "'" +
 				"\n" + tab2 + "ArrayIndexingOrder='RowMajorOrder'" +
@@ -347,13 +510,27 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 				"\n" + tab2 + "Endian='" + _options.byte_order + "'" +
 				"\n" + tab2 + "ExternalFileName=''" +
 				"\n" + tab2 + "ExternalFileOffset='' >");
-		writer.write("\n" + tab2 + "<MetaData Name='" + this_column.getName() + "'/>");
+		
+		
+		writer.write("\n" + tab2 + "<MetaData>");
+		writeMetadataItem(writer, "Name", this_column.getName(), 3);
+		
+//		if (_options.metadata != null) {
+//			
+//			for (int i = 0; i < metadata_mesh.length; i++) {
+//				writeMetadataItem(writer, metadata_mesh[i], _options.metadata.get(metadata_mesh[i]).toString(), 3);
+//				}
+//			
+//			}
+		
+		writer.write("\n" + tab2 + "</MetaData>");
+		
 		writer.write("\n" + tab2 + "<CoordinateSystemTransformMatrix/>");
 		writer.write("\n" + tab2 + "<Data>");
 		
 		// Write data in specified format
 		switch (_options.encoding){
-			case GzipBase64Binary:
+			case GZipBase64Binary:
 				writeBinaryArray(writer, data, true, b_order);
 				break;
 			case Base64Binary:
@@ -371,6 +548,85 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		
 		writer.write("</Data>");
 		writer.write("\n" + tab1 + "</DataArray>");
+	}
+	
+	private ArrayList<MguiNumber> getDataAsInteger(ArrayList<MguiNumber> data) {
+		
+		ArrayList<MguiNumber> new_data = new ArrayList<MguiNumber>(data.size());
+		
+		for (MguiNumber v : data) {
+			new_data.add(new MguiInteger(v.getValue()));
+			}
+		
+		return new_data;
+		
+	}
+	
+	protected boolean writeLabelTable(BufferedWriter writer, VertexDataColumn this_column, GiftiOutputOptions _options)
+			throws IOException{
+		
+		// LabelTable
+		NameMap label_nmap = this_column.getNameMap();
+		DiscreteColourMap label_cmap = null;
+		if (this_column.getColourMap() instanceof DiscreteColourMap) {
+			label_cmap = (DiscreteColourMap)this_column.getColourMap();
+			}
+		
+		if (label_cmap == null) {
+			InterfaceSession.log("GiftiSurfaceWriter: LabelTable must correspond to a colours map; column " + 
+									this_column.getName() + " has none.", LoggingType.Errors);
+			return false;
+			}
+
+		writer.write("\n" + tab1 + "<LabelTable>");
+		String idx_name;
+		
+		for (int idx : label_cmap.getIndices()) {
+			idx_name = null;
+			if (label_nmap != null) {
+				idx_name = label_nmap.get(idx);
+				}
+			if (idx_name == null) {
+				idx_name = "" + idx;
+				}
+			writer.write("\n" + tab2 + "<Label Key='" + idx + "'");
+			Colour clr = label_cmap.getColour(idx);
+			writer.write(" Red='" + clr.getRed() + "'" +
+						 " Green='" + clr.getGreen() + "'" +
+						 " Blue='" + clr.getBlue() + "'" +
+						 " Alpha='" + clr.getAlpha() + "'>" +
+						 idx_name + "</Label>");
+			}
+		
+		writer.write("\n" + tab1 + "</LabelTable>");
+		
+		return true;
+	}
+	
+	protected void writeVertexLabels(BufferedWriter writer, VertexDataColumn this_column, GiftiOutputOptions _options) 
+			throws IOException{
+		
+		
+		
+		
+		
+	}
+	
+	
+	protected void writeMetadataItem(BufferedWriter writer, String name, String value, int tab) throws IOException {
+		
+		String tab1 = "";
+		for (int i = 0; i < tab; i++)
+			tab1 += "\t";
+		String tab2 = tab1 + "\t";
+		
+		String line = "\n" + tab1 + "<MD>" +
+					  "\n" + tab2 + "<Name>" + name + "</Name>" +
+					  "\n" + tab2 + "<Value>" + value + "</Value>" +
+					  "\n" + tab1 + "</MD>";
+		
+		writer.write(line);
+		
 	}
 	
 	protected void writeVertexColours(BufferedWriter writer, VertexDataColumn this_column, GiftiOutputOptions _options, boolean has_alpha) throws IOException{
@@ -400,7 +656,7 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 			case Base64Binary:
 				encoding = "Base64Binary";
 				break;
-			case GzipBase64Binary:
+			case GZipBase64Binary:
 				encoding = "GZipBase64Binary";
 				break;
 			case ExternalFileBinary:
@@ -429,7 +685,7 @@ public class GiftiSurfaceWriter extends SurfaceFileWriter {
 		
 		// Write data in specified format
 		switch (_options.encoding){
-			case GzipBase64Binary:
+			case GZipBase64Binary:
 				writeBinaryColours(writer, this_column, true, b_order, has_alpha);
 				break;
 			case Base64Binary:
